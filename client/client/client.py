@@ -1,27 +1,44 @@
 import socket
 import cPickle as pickle
-from message import *
+from client_objects import *
+from Crypto.PublicKey import RSA
+from Crypto.Signature import PKCS1_v1_5
 
-USERNAME = None
+CURRENT_USER = None
 HOST = ''
 PORT = 1026
-DH_SECRET = None
-DH_PRIME = None
-DH_BASE = None
+SERVER_PUBLIC_KEY = None
 
 def register(username):
 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	createUserMsg = Message(username, 'createUser', None, None, None)
+	newUserMsg = Message('newUser', None, None, None, None)
 	s.connect((HOST, PORT))
-	# obtain prime and base from server
+	# obtain dh prime and base, and server public key
 	s.send(pickle.dumps(msg))
 	resp = pickle.loads(s.recv(4096))
 
-	DH_PRIME = resp.prime
-	DH_BASE = resp.base
-	DH_SECRET = random.getrandbits(128)
+	SERVER_PUBLIC_KEY = resp.public_key
+	CURRENT_USER = User(username)
+	dh_prime = resp.prime
+	dh_base = resp.base
+	dh_secret = random.getrandbits(128)
 
-	storeDHMsg = Message(username, 'registerUser', )
+	CURRENT_USER.add_dh_key(dh_secret, dh_prime, dh_base)
+	CURRENT_USER.add_rsa_key(RSA.generate(2048))
+	data = pickle.dumps({
+		'username': CURRENT_USER.username,
+		'action': 'registerUser',
+		'dh_value': power(dh_base, dh_secret, dh_prime),
+		'public_key': CURRENT_USER.key.publicKey()
+	})
+	signature = CURRENT_USER.key.sign(data)
+	storeDHMsg = Message(CURRENT_USER.username, data, signature)
+	s.send(pickle.dumbs(CURRENT_USER.key.encrypt(pickle.dumps(storeDHMsg))))
+	resp = pickle.loads(s.recv(4096))
+	if (resp.status == "OK"):
+		return True
+	return False
+
 
 def createFile(name):
 	raise NotImplementedError
