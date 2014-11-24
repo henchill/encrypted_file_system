@@ -1,9 +1,10 @@
 #!/usr/bin/env python2.7
 
+import sys
+import json
+import base64
 import socket
 from thread import *
-import sys
-import base64
 
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA
@@ -11,63 +12,120 @@ from Crypto import Random
 
 server = None
 
-class Message:
-	status = ""
-	payload = ""
+# Crypto parameters
+RSA_KEY_SIZE = 2048
+
+# Server socket parameters
+SERVER_PORT = 1026
+MAX_PACKET_SIZE = 1024
+MAX_CONNECTIONS = 10
+
+class ServerResponse:
+	"""Server response message to client requests."""
+	status = None
+	payload = None
 
 	def __init__(self, status, payload):
 		self.status = status
 		self.payload = payload
 
 	def __str__(self):
-		return status + " " + payload
+		return " ".join([self.status, self.payload, "\r\n"])
+
+
+class OKResponse(ServerResponse):
+	def __init__(self, msg):
+		self.status = "OK"
+		self.payload = msg
+
+class ErrorResponse(ServerResponse):
+	def __init__(self, msg):
+		self.status = "NO"
+		self.payload = msg
+
 
 class ServerThread:
+	"""Represents a single connection to the server."""
 	conn = None
 
 	def __init__(self, conn):
 		self.conn = conn
-		self.client_thread()
+		self.receive_requests()
 
-	def client_thread(self):
-		while True:
-			data = self.conn.recv(1024)
-			if not data:
-				break
+	def handle_request(self, req):
+		# Perform actions based on dict received
+		try:
+			action = req["action"]
 
-			if data.startswith("register"):
-				self.conn.sendall("Got register\r\n")
-				reg = data.strip().split(" ")
-				name = reg[1]
-				dh = reg[2]
-				pub = reg[3]
-				resp = server.register(name, dh, pub)
-				conn.sendall(str(resp))
+			# REGISTER
+			if action == "register":
+				name = req["name"]
+				dh = req["dh"]
 
-			elif data.startswith("create"):
-				self.conn.sendall("Got create file\r\n")
-				create = data.strip().split(" ")
-				user = create[1]
-				blob = create[2]
-				server.create(user, blob)
+				# rebuild user public key
+				pub = req["pub"]
+				N = long(pub["N"])
+				e = long(pub["e"])
+				rsa_pub = RSA.construct((N, e))
+
+				resp = server.register(name, dh, rsa_pub)
+				self.conn.sendall(str(resp))
+
+			# KEY
+			elif action == "key":
+				pub = server.key.publickey()
+				okmsg = "(%lu, %lu)" % (pub.n, pub.e)
+				resp = OKResponse(okmsg)
+				self.conn.sendall(str(resp))
+
+			# CREATE
+			elif action == "create":
+				pass
 
 			else:
-				self.conn.sendall("don't know what to do with " + data)
+				print "Invalid message:", data
+				self.conn.sendall("Invalid message.")
 
-		self.conn.close()
+		except KeyError as ke:
+			print "Couldn't find expected data value"
+
+	def receive_requests(self):
+		try:
+			while True:
+				data = self.conn.recv(MAX_PACKET_SIZE)
+				if not data:
+					break
+
+				# Try decoding from JSON
+				try:
+					req = json.loads(data)
+				except ValueError as ve:
+					print "Invalid message received"
+					continue
+
+				self.handle_request(req)
+		except Exception as e:
+			print "Exception:", e
+			pass
+		finally:
+			self.conn.close()
 
 class Server:
-	name = ""
-	host = ""
-	port = 1027
-	key = None
+	name = None
 
-	users = {}
-	files = {}
+	host = ''
+	port = SERVER_PORT
+
+	key = None # RSA public/private key pair
+
+	users = None
+	files = None
 
 	def __init__(self, name):
 		self.name = name
-		self.key = RSA.generate(2048)
+		self.key = RSA.generate(RSA_KEY_SIZE)
+		self.users = {}
+		self.files = {}
 	
 	def create_worker(self, conn):
 		print "creating worker..."
@@ -86,36 +144,49 @@ class Server:
 			print "Bind failed, error", msg[1]
 			sys.exit()
 
-		s.listen(10)
+		s.listen(MAX_CONNECTIONS)
 		print "Socket now listening..."
 			
-		while True:
-			conn, addr = s.accept()
-			print "Connected with", addr[0], ":", str(addr[1])
+		try:
+			while True:
+				conn, addr = s.accept()
+				print "Connected with", addr[0], ":", str(addr[1])
 
-			start_new_thread(self.create_worker, (conn,))
+				start_new_thread(self.create_worker, (conn,))
 
-		s.close()
+			s.close()
+		except (KeyboardInterrupt, Exception) as k:
+			s.close()
+			sys.exit(0)
+		finally:
+			s.close()
 
 	def register(self, name, dh, pk):
+		if name in self.users:
+			errmsg = "User %s already exists" % name
+			return ErrorResponse(errmsg)
+
 		u = UserEntry(name, dh, pk)
 		self.users[name] = u
-		print "Added user", str(u)
-		pub = self.key.publickey()
-		resp = Message("OK", "(%lu, %lu)" % (pub.n, pub.e))
+		okmsg = "Added user %s" % str(u)
+
+		resp = OKResponse(okmsg)
 		return resp
 
 	def create(self, user, filename, blob):
 		if user not in self.users:
-			print "User %s doesn't exist" % user
+			errmsg = "User %s doesn't exist" % user
+			print errmsg
+			return ErrorResponse(errmsg)
+
 		self.files[filename] = blob
 		print "created filename", filename, "->", base64.b64encode(blob)
 		
 
 class UserEntry:
-	name = ""
+	name = None
 	dh_key = None # Diffie-Hellman key
-	public_key = None
+	public_key = None # RSA public key
 
 	def __init__(self, name, dh, public):
 		self.name = name
