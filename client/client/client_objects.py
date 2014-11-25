@@ -1,21 +1,24 @@
 class Message(): 
-	def __init__(self, action, user, dst_obj, data, signature): 
-		self.action = action
-		self.user = user
-		self.dst_obj = dst_obj
-		self.data = data
-		self.signature = signature
+    def __init__(self, user, data, signature): 
+    	self.user = user
+    	self.data = data
+    	self.signature = signature
 
-class User():
-	def __init__(self, username):
-		self.username = username
-		self.shared_keys = {} # key: filename value: shared key
+class Session():
+    def __init__(self, username, rsa_key, dh_secret, dh_prime, dh_base, server_pk):
+    	self.current_user = username
+    	self.rsa_key = rsa_key
+    	self.dh_key = (dh_secret, dh_prime, dh_base)
+    	self.shared_keys = {} # key: filename value: shared key
 
-	def add_rsa_key(self, key):
-		self.key = key
+    def add_shared_key(self, fname, key):
+    	self.shared_keys[fname] = key
+   
+   def save(self):
+        # save user and write info to file
+        # consider using json
+        raise NotImplementedError
 
-	def add_dh_key(self, secret, prime, base):
-		self.dh_key = (secret, prime, base)
-
-	def add_shared_key(self, fname, key):
-		self.shared_keys[fname] = key
+   def loadUser():
+        # load user data from file
+        raise NotImplementedError
