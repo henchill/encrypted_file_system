@@ -6,6 +6,7 @@ import base64
 import socket
 from thread import *
 
+from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA
 from Crypto import Random
@@ -16,9 +17,12 @@ server = None
 RSA_KEY_SIZE = 2048
 
 # Server socket parameters
-SERVER_PORT = 1026
+SERVER_PORT = 1027
 MAX_PACKET_SIZE = 1024
 MAX_CONNECTIONS = 10
+
+# Data transmission parameters
+CHUNK_SIZE = 200
 
 class ServerResponse:
 	"""Server response message to client requests."""
@@ -38,10 +42,31 @@ class OKResponse(ServerResponse):
 		self.status = "OK"
 		self.payload = msg
 
+
 class ErrorResponse(ServerResponse):
 	def __init__(self, msg):
 		self.status = "NO"
 		self.payload = msg
+
+
+class FileResponse(ServerResponse):
+	filename = None
+	seq = None
+	length = None
+	chunk = None
+
+	def __init__(self, filename, seq, length, chunk):
+		self.status = "OK"
+		self.payload = ""
+		self.filename = filename
+		self.seq = seq
+		self.length = length
+		self.chunk = chunk
+
+	def __str__(self):
+		response = {"response": self.status, "filename": self.filename, "seq": self.seq, "length": self.length, "chunk": self.chunk}
+		response_str = json.dumps(response)
+		return response_str
 
 
 class ServerThread:
@@ -78,9 +103,46 @@ class ServerThread:
 				resp = OKResponse(okmsg)
 				self.conn.sendall(str(resp))
 
+			# DECRYPT
+			elif action == "decrypt":
+				ciphertexts = req["ciphertexts"]
+				plaintext = ""
+				cipher = PKCS1_OAEP.new(server.key)
+
+				try:
+					for ciphertext in ciphertexts:
+						plaintext += cipher.decrypt(base64.b64decode(ciphertext))
+				except ValueError as ve:
+					print "Decryption failed"
+					return
+
+				print "Decrypted message: %s" % plaintext
+
 			# CREATE
 			elif action == "create":
-				pass
+				user = req["user"]
+				filename = req["filename"]
+				blob = ""
+				resp = server.create(user, filename, blob)
+				self.conn.sendall(str(resp))
+
+			# READ
+			elif action == "read":
+				filename = req["filename"]
+				seq = req["seq"]
+
+				resp = server.read(filename, seq)
+				self.conn.sendall(str(resp))
+
+			# WRITE
+			elif action == "write":
+				filename = req["filename"]
+				length = req["length"]
+				seq = req["seq"]
+				blob = req["blob"]
+
+				resp = server.write(filename, length, seq, blob)
+				self.conn.sendall(str(resp))
 
 			else:
 				print "Invalid message:", data
@@ -93,15 +155,16 @@ class ServerThread:
 		try:
 			while True:
 				data = self.conn.recv(MAX_PACKET_SIZE)
-				if not data:
+				if data is None or data == "":
 					break
+				print "received", data
 
 				# Try decoding from JSON
 				try:
 					req = json.loads(data)
 				except ValueError as ve:
-					print "Invalid message received"
-					continue
+					print "Message is not JSON"
+					break
 
 				self.handle_request(req)
 		except Exception as e:
@@ -110,9 +173,8 @@ class ServerThread:
 		finally:
 			self.conn.close()
 
-class Server:
-	name = None
 
+class Server:
 	host = ''
 	port = SERVER_PORT
 
@@ -121,8 +183,7 @@ class Server:
 	users = None
 	files = None
 
-	def __init__(self, name):
-		self.name = name
+	def __init__(self):
 		self.key = RSA.generate(RSA_KEY_SIZE)
 		self.users = {}
 		self.files = {}
@@ -133,7 +194,7 @@ class Server:
 
 	# binary tides
 	def listen(self):
-		print "Server", self.name, "is listening"
+		print "Server is listening"
 
 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		print "Socket created"
@@ -169,6 +230,7 @@ class Server:
 		u = UserEntry(name, dh, pk)
 		self.users[name] = u
 		okmsg = "Added user %s" % str(u)
+		print okmsg
 
 		resp = OKResponse(okmsg)
 		return resp
@@ -179,13 +241,95 @@ class Server:
 			print errmsg
 			return ErrorResponse(errmsg)
 
-		self.files[filename] = blob
-		print "created filename", filename, "->", base64.b64encode(blob)
+		f = FileEntry(filename)
+		f.owner = user
+		self.files[filename] = FileEntry(filename)
 		
+		okmsg = "Created file %s for user %s" % (filename, user)
+		print okmsg
+		return OKResponse(okmsg)
+
+	def write(self, filename, length, seq, blob):
+		if filename not in self.files:
+			errmsg = "File %s doesn't exist" % filename
+			print errmsg
+			return ErrorResponse(errmsg)
+
+		f = self.files[filename]
+		chunks = length / CHUNK_SIZE + 1
+
+		if f.intact():
+			f.length = length
+			f.blob = [None] * chunks
+		else:
+			if f.length != length:
+				errmsg = "Length thought to be %d but file not completely written" % (chunks)
+				print errmsg
+				return ErrorResponse(errmsg)
+
+		if seq >= chunks or seq < 0:
+			errmsg = "Chunk sequence number %d out of range (0 <= seq < %d)" % (seq, chunks)
+			print errmsg
+			return ErrorResponse(errmsg)
+
+		f.blob[seq] = blob
+		okmsg = "File %s... (%d/%d)" % (filename[0:10], seq + 1, chunks)
+		print okmsg
+		return OKResponse(okmsg)
+
+	def read(self, filename, seq):
+		if filename not in self.files:
+			errmsg = "File %s doesn't exist" % filename
+			print errmsg
+			return ErrorResponse(errmsg)
+
+		f = self.files[filename]
+		chunks = f.length / CHUNK_SIZE + 1
+
+		if not f.intact():
+			errmsg = "File is not intact"
+			print errmsg
+			return ErrorResponse(errmsg)
+
+		if seq >= chunks or seq < 0:
+			errmsg = "Chunk sequence number %d out of range (0 <= seq < %d)" % (seq, chunks)
+			print errmsg
+			return ErrorResponse(errmsg)
+
+		chunk = f.blob[seq]
+
+		resp = FileResponse(filename, seq, f.length, chunk)
+		return resp
+
+
+class FileEntry:
+	filename = None
+	owner = None
+	length = None
+	blob = None
+
+	def __init__(self, filename, length=0):
+		self.filename = filename
+		self.length = length
+		self.blob = []
+
+	def __str__(self):
+		return "File " + self.filename
+
+	# Is the blob (an array, typically) complete? Did we send all
+	# necessary packets? Phrased another way, is it ready to be
+	# overwritten?
+	def intact(self):
+		if self.blob is None:
+			return True
+		for b in self.blob:
+			if b is None:
+				return False
+		return True
+
 
 class UserEntry:
 	name = None
-	dh_key = None # Diffie-Hellman key
 	public_key = None # RSA public key
 
 	def __init__(self, name, dh, public):
@@ -198,6 +342,6 @@ class UserEntry:
 
 
 if __name__ == "__main__":
-	server = Server("foo bar")
+	server = Server()
 	server.listen()
 
