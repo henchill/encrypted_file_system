@@ -7,15 +7,27 @@ class Message():
 		self.signature = signature
 
 class User():
-	def __init__(self, username):
+	def __init__(self, username, rsa_key):
 		self.username = username
+		self.rsa_key = rsa_key
 		self.shared_keys = {} # key: filename value: shared key
 
-	def add_rsa_key(self, key):
-		self.key = key
+	def get_public_key(self):
+		return self.rsa_key.publicKey()
 
-	def add_dh_key(self, secret, prime, base):
-		self.dh_key = (secret, prime, base)
+	def get_private_key(self):
+		pass
 
-	def add_shared_key(self, fname, key):
-		self.shared_keys[fname] = key
+	def get_shared_key(self, path):
+		pass
+
+	def save_user(self):
+		pass
+
+	def sign(self, data):
+		pass
+		
+	def load_user_from_file(filename):
+		# returns user session information
+
+
