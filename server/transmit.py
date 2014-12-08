@@ -1,12 +1,6 @@
 import json
 from encrypt import *
 
-def encode(dictionary):
-	return json.dumps(dictionary)
-
-def decode(json_text):
-	return json.loads(json_text)
-
 def transmit_ciphertexts(connection, ciphertexts):
 	"""Send an array of ciphertexts through a socket."""
 
@@ -15,7 +9,7 @@ def transmit_ciphertexts(connection, ciphertexts):
 
 	for ciphertext in ciphertexts:
 		packet = {"seq": packet_seq, "count": packet_count, "payload": ciphertext}
-		packet_json = encode(packet)
+		packet_json = json.dumps(packet)
 		# connection.sendall(packet_json)
 		print packet_json
 		packet_seq += 1
