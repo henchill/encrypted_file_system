@@ -5,8 +5,10 @@ import base64
 from client_objects import *
 from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5
-from transceive import *
-from encrypt import *
+
+from efs_helper.encrypt import *
+from efs_helper.transceive import *
+
 
 def register(socket, username):
     current_user = User(username, RSA.generate(2048))
@@ -23,10 +25,16 @@ def register(socket, username):
         'signature': signature,
         'data': data
     }))
+	
+    socket.send(msg) #send unencrypted msg 
+    resp = base64.b64decode(socket.recv(1024)) #receive server resp
+    respdata = json.loads(decrypt(current_user.rsa_key(), resp))
 
-    s.send(msg) #send unencrypted msg 
-    resp = s.recv(1024) #receive server resp
-    print resp
+    status = {
+		'status': respdata['status']
+		'message': respdata['message']
+	}
+	return (status, respdata['public_key'], current_user)
 
 
 def sign_in(username):
@@ -44,3 +52,5 @@ def deleteFile(name):
 def deleteFolder(name):
     raise NotImplementedError
 
+def writeFile(name):
+	raise NotImplementedError

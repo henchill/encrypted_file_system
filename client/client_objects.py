@@ -11,7 +11,7 @@ class User():
         self.shared_keys = {} # key: filename value: shared key
 
     def get_public_key(self):
-        return self.rsa_key.publicKey()
+        return self.rsa_key.publickey().exportKey("PEM")
 
     def get_private_key(self):
         pass
@@ -26,6 +26,7 @@ class User():
         pass
             
     def load_user_from_file(filename):
-        # returns user session information
+        # returns user session informationj
+        pass
 
 
