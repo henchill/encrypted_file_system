@@ -108,3 +108,28 @@ def verify_dictionary(key, d):
 
 	verifier = PKCS1_PSS.new(key)
 	return verifier.verify(h, signature)
+
+def verify_inner_dictionary(key, signature, d):
+	"""Verifies the contents of the dictionary based on its signature."""
+
+	original = d.copy()
+	dict_str = json.dumps(original)
+	h = SHA.new()
+	h.update(dict_str)
+
+	signature = base64.b64decode(signature)
+
+	verifier = PKCS1_PSS.new(key)
+	return verifier.verify(h, signature)
+
+def sign_inner_dictionary(key, d):
+	"""Signs the contents of the dictionary as encoded in JSON.
+	"""
+
+	dict_str = json.dumps(d)
+	h = SHA.new()
+	h.update(dict_str)
+	signer = PKCS1_PSS.new(key)
+
+	signature = signer.sign(h)
+	return base64.b64encode(signature)

@@ -1,77 +1,55 @@
-#!/usr/bin/env python2.7
 
-import socket
-import sys
-from Crypto.Cipher import PKCS1_v1_5
 from Crypto.PublicKey import RSA
-from Crypto.Hash import SHA
-import base64
-import re
+from server import *
+from encrypt import *
 
-HOST = 'localhost'
-PORT = 1028
+# Crypto parameters
+RSA_KEY_SIZE = 2048
 
-use_socket = True
+if __name__ == "__main__":
+	server = EFSServer()
+	alice = {"username":"Alice", "key": RSA.generate(RSA_KEY_SIZE)}
+	bob = {"username":"Bob", "key": RSA.generate(RSA_KEY_SIZE)}
+	eve = {"username":"Eve", "key": RSA.generate(RSA_KEY_SIZE)}
+	jill = {"username":"Jill", "key": RSA.generate(RSA_KEY_SIZE)}
+	
 
-# Key generation
-key = RSA.generate(2048)
-pub = key.publickey()
+	#TEST REGISTER
+	test="REGISTER"
+	req = {}
+	data = {}
+	
+	data["action"] = "register"
+	data["username"] = alice["username"]
+	data["public_key"] = {"N":alice["key"].publickey().n, "e":alice["key"].publickey().e}
 
-# Socket creation
-if use_socket:
-	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	s.connect((HOST, PORT))
+	
+	req["username"]= alice["username"]
+	req["data"] = data
+	req["signature"] = sign_inner_dictionary(alice["key"], data)
+	resp = server.handle_request(req)
+	if "message" in resp:
+		print "TEST %s: PASS" % test
+	else:
+		print "TEST %s: FAIL" % test
 
-# Registration information
-registration = "register Alice %ld %ld" % (0, pub.e)
+	#TEST KEY
+	test="KEY"
+	req = {}
+	data = {}
+	
+	data["action"] = "key"
+	data["username"] = alice["username"]
+	
+	req["username"]= alice["username"]
+	req["data"] = data
+	req["signature"] = sign_inner_dictionary(alice["key"], data)
+	resp = server.handle_request(req)
+	if "message" in resp:
+		print "TEST %s: PASS" % test
+	else:
+		print "TEST %s: FAIL" % test
 
-# Register
-pub_N = 0
-pub_e = 0
-print "I sent", registration
-if use_socket:
-	s.sendall(registration)
-	data = s.recv(1024)
-	print "In response to registration, I got", data
-	data = s.recv(1024)
-	print "Then, I got", data
-	pub_tuple = re.match(r"OK \((\d+), (\d+)\)", data)
-	if pub_tuple is not None:
-		pub_N = long(pub_tuple.group(1))
-		pub_e = long(pub_tuple.group(2))
-		print "Server public key is (%lu, %lu)" % (pub_N, pub_e)
+	#TEST CREATE
 
-server_public = RSA.construct((pub_N, pub_e))
 
-# Create test message
-message = "hello bob"
-message_fn = "hello.txt"
-
-h = SHA.new(message)
-hfn = SHA.new(message_fn)
-
-cipher = PKCS1_v1_5.new(key)
-ciphertext = cipher.encrypt(message + h.digest())
-ciphertext_fn = cipher.encrypt(message_fn + hfn.digest())
-
-b64c = base64.b64encode(ciphertext)
-b64cfn = base64.b64encode(ciphertext_fn)
-
-# Creation
-creation = "create Alice %s %s" % (b64c, b64cfn)
-creation_h = SHA.new(creation)
-
-print "creation is", creation
-
-server_cipher = PKCS1_v1_5.new(server_public)
-ciphertext_creation = cipher.encrypt(creation + creation_h.digest())
-
-print "I sent", creation
-print "(Encrypted:", ciphertext_creation, ")"
-if use_socket:
-	s.sendall(creation)
-	data = s.recv(1024)
-	print "In response to create, I got", data
-
-if use_socket:
-	s.close()

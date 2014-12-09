@@ -35,7 +35,7 @@ class ServerResponse:
 
 	def __str__(self):
 		return " ".join([self.status, self.payload, "\r\n"])
-
+		
 
 class OKResponse(ServerResponse):
 	def __init__(self, msg):
