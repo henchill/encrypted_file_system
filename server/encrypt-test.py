@@ -46,7 +46,30 @@ try:
 	else:
 		print "TEST %d: FAIL" % test
 
+	# Test signing dictionary
+	test = 5
+	dictionary = {"foo": "bar", "garply": [1, "baz"]}
+	sign_dictionary(k, dictionary)
+	if "signature" in dictionary:
+		print "TEST %d: PASS" % test
+	else:
+		print "TEST %d: FAIL" % test
 	
+	# Test signature verification
+	test = 6
+	if verify_dictionary(k, dictionary):
+		print "TEST %d: PASS" % test
+	else:
+		print "TEST %d: FAIL" % test
+
+	# Test bad dictionary verification
+	test = 7
+	dictionary["signature"] = "fail"
+	if not verify_dictionary(k, dictionary):
+		print "TEST %d: PASS" % test
+	else:
+		print "TEST %d: FAIL" % test
+
 except Exception as e:
 	print "TEST %d: EXCEPTION: %s" % (test, str(e))
 	sys.exit(1)

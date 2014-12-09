@@ -1,6 +1,7 @@
 import json
 import base64
 
+from Crypto.Signature import PKCS1_PSS
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA
@@ -75,3 +76,35 @@ def encrypt_filename(key, filename):
 def decrypt_filename(key, ciphertext):
 	return decrypt(key, ciphertext, pad=False)
 
+def sign_dictionary(key, d):
+	"""Signs the contents of the dictionary as encoded in JSON.
+
+	This modifies the dictionary to have a "signature" key. It must
+	not already be present in the dictionary.
+	"""
+
+	if "signature" in d:
+		raise KeyError("signature object already present")
+
+	dict_str = json.dumps(d)
+	h = SHA.new()
+	h.update(dict_str)
+	signer = PKCS1_PSS.new(key)
+
+	signature = signer.sign(h)
+	d["signature"] = base64.b64encode(signature)
+
+def verify_dictionary(key, d):
+	"""Verifies the contents of the dictionary based on its signature."""
+
+	original = d.copy()
+	# Remove the signature key
+	del original["signature"]
+	dict_str = json.dumps(original)
+	h = SHA.new()
+	h.update(dict_str)
+
+	signature = base64.b64decode(d["signature"])
+
+	verifier = PKCS1_PSS.new(key)
+	return verifier.verify(h, signature)
