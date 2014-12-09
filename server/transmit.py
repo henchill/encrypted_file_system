@@ -38,8 +38,13 @@ class EFSConnection:
 		for ciphertext in ciphertexts:
 			packet = {"seq": packet_seq, "count": packet_count, "payload": ciphertext}
 			packet_json = json.dumps(packet)
-			self.connection.sendall(packet_json)
-			# print packet_json
+
+			# Prepend packet length to packet (not including length string itself)
+			length = len(packet_json)
+			packet_string = str(length) + packet_json
+
+			self.connection.send(packet_string)
+			# print packet_string
 			packet_seq += 1
 
 	def transmit(self, key, text):

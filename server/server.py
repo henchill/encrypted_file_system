@@ -1,5 +1,6 @@
 #!/usr/bin/env python2.7
 
+import json
 import time
 import socket
 import threading
@@ -21,8 +22,53 @@ class EFSServer:
 	# Your code here
 
 class EFSHandler(SocketServer.BaseRequestHandler):
+	def receive(self):
+		packets = None
+
+		while packets is None or None in packets:
+			try:
+				# Get length of packet
+				packet_length = 0
+				data = ""
+				while True:
+					# Byte-wise receive data
+					data = self.request.recv(1)
+					if data is None or data == "":
+						continue
+					elif data == "{": # If we see the opening curly brace, we're done
+						break
+					else:
+						length_digit = int(data)
+						packet_length = (packet_length * 10) + length_digit
+
+				# Receive packet with known length
+				data = "{"
+				remaining_length = packet_length - len(data)
+				while remaining_length > 0:
+					partial_data = self.request.recv(remaining_length)
+					if partial_data is None or partial_data == "":
+						continue
+					data += partial_data
+					remaining_length = packet_length - len(data)
+
+				# Load dictionary from JSON format
+				d = json.loads(data)
+				if packets is None:
+					packets = [None] * d["count"]
+
+				if packets[d["seq"]] is None:
+					packets[d["seq"]] = d["payload"]
+			except ValueError as ve:
+				print "invalid packet (%s...), dropping" % data[:10]
+				continue
+			except KeyError as ke:
+				print "valid packet but missing key"
+				continue
+
+		return packets
+
 	def handle(self):
-		data = self.request.recv(buffer_size)
+		data = self.receive()
 		if use_threaded:
 			cur_thread = threading.current_thread()
 			response = "{} responds, {}".format(cur_thread.name, data)
