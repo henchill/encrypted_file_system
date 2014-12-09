@@ -1,21 +1,50 @@
 import json
+import socket
+
 from encrypt import *
 
-def transmit_ciphertexts(connection, ciphertexts):
-	"""Send an array of ciphertexts through a socket."""
+class EFSConnection:
+	"""Class representing a connection to the server.
 
-	packet_count = len(ciphertexts)
-	packet_seq = 0
+	Use as follows:
 
-	for ciphertext in ciphertexts:
-		packet = {"seq": packet_seq, "count": packet_count, "payload": ciphertext}
-		packet_json = json.dumps(packet)
-		# connection.sendall(packet_json)
-		print packet_json
-		packet_seq += 1
+	with EFSConnection(host, port) as c:
+		c.transmit(key, plaintext)
+	"""
 
-def transmit(connection, key, text):
-	"""Send a string encrypted on key through a socket."""
+	host = None
+	port = None
 
-	ciphertexts = encrypt(key, text)
-	transmit_ciphertexts(connection, ciphertexts)
+	connection = None
+
+	def __init__(self, host, port):
+		self.host = host
+		self.port = port
+
+	def __enter__(self):
+		self.connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		self.connection.connect((self.host, self.port))
+		return self
+
+	def __exit__(self, type, value, traceback):
+		self.connection.close()
+
+	def transmit_ciphertexts(self, ciphertexts):
+		"""Send an array of ciphertexts through a socket."""
+
+		packet_count = len(ciphertexts)
+		packet_seq = 0
+
+		for ciphertext in ciphertexts:
+			packet = {"seq": packet_seq, "count": packet_count, "payload": ciphertext}
+			packet_json = json.dumps(packet)
+			self.connection.sendall(packet_json)
+			# print packet_json
+			packet_seq += 1
+
+	def transmit(self, key, text):
+		"""Send a string encrypted on key through a socket."""
+
+		ciphertexts = encrypt(key, text)
+		self.transmit_ciphertexts(ciphertexts)
+
