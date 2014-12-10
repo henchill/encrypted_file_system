@@ -70,18 +70,15 @@ try:
 	else:
 		print "TEST %d: FAIL" % test
 
-	# Test AES encryption
+
+	# Test inner signature
 	test = 8
-	(ciphertext, iv) = encrypt_aes(b'Sixteen byte key', reference)
-	if ciphertext is not None and iv is not None:
-		print "TEST %d: PASS" % test
-	else:
-		print "TEST %d: FAIL" % test
-	
-	# Test AES decryption
+	signature = sign_inner_dictionary(k, dictionary)
+	print "TEST %d: PASS" % test
+
+	# Test verify
 	test = 9
-	plaintext = decrypt_aes(b'Sixteen byte key', iv, ciphertext)
-	if plaintext == reference:
+	if verify_inner_dictionary(k, signature, dictionary):
 		print "TEST %d: PASS" % test
 	else:
 		print "TEST %d: FAIL" % test
