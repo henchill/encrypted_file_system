@@ -81,8 +81,11 @@ class EFSServer:
 
 			#(2)	
 			elif handler == "read":
-				print "Not implemented.."
-
+				if verify_inner_dictionary(self.users[username], signature, data):
+					print "Signature verfied. Trying to read file..."
+					resp = self.read(username, data["filename"])
+					return resp
+		
 			#(3)
 			elif handler == "write":
 				print "Not implemented.."
@@ -131,7 +134,44 @@ class EFSServer:
 		if username not in self.users:
 			errmsg =  "User %s not registered" % username
 			return ErrorResponse(errmsg)
+		(perm, msg, parent) = self.traverse(username, filename)
+		data = {}
+		if perm:	
+			#Made it here => can create file in parent
+			fe = FileEntry(filename, username, file_acl, file_content)
+			current_dir.add_file(fe)
+			createmsg = "File created with filename %s" % str(filename)
+			print createmsg
+			resp = OKResponse(createmsg)
+			return resp.getPayload(data)
+		else:
+			print msg
+			resp = ErrorResponse(msg)
+			return resp.getPayload(data)	
 
+	def read(self, username, filename):
+		if username not in self.users:
+			errmsg =  "User %s not registered" % username
+			return ErrorResponse(errmsg)
+		(perm, msg, parent) = self.traverse(username, filename)
+		data = {}
+		if perm:	
+			#Made it here => can read file in parent
+			fe = parent.get_entry(filename)
+			if fe.is_readable(username):
+				data["filename"] = filename
+				data["file"] = fe.get_file()
+				data["acl"] = fe.get_acl()
+			readmsg = "Sending file for Read with filename %s" % str(filename)
+			print readmsg
+			resp = OKResponse(readmsg)
+			return resp.getPayload(data)
+		else:
+			print msg
+			resp = ErrorResponse(msg)
+			return resp.getPayload(data)
+
+	def traverse(self, username, filename):
 		fn = filename
 		current_dir = None
 
@@ -145,7 +185,7 @@ class EFSServer:
 				home_acl = self.home_acls[current_name]
 				if (home_acl.is_readable(username) == False):
 					errmsg =  "Permission denied %s" % current_name
-					return ErrorResponse(errmsg)
+					return (False, errmsg)
 				else:
 					for e in self.files:
 						if e.name == username:
@@ -155,23 +195,12 @@ class EFSServer:
 				current_acl = current_dir.get_acl()[current_name]
 				if (current_acl.is_readable(username) == False):
 					errmsg =  "Permission denied %s" % current_name
-					return ErrorResponse(errmsg)
+					return (False, errmsg)
 				else:
 					current_dir = current_dir.get_entry(current_name)
 					continue
-
-		#Made it here => can create file in current_dir
-		fe = FileEntry(filename, username, file_acl, file_content)
-		current_dir.add_file(fe)
-
-		createmsg = "File created with name %s" % str(filename)
-		print createmsg
-		data = {}
-		resp = OKResponse(filemsg)
-		return resp.getPayload(data)
-
-
-
+		okmsg = "User has sufficient permissions.."
+		return (True, okmsg, current_dir)
 
 class EFSHandler(SocketServer.BaseRequestHandler):
 	def handle(self):

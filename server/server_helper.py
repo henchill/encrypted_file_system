@@ -41,11 +41,11 @@ class UserEntry:
 		return self.username
 
 class Entry:
-	def __init__(self, name, acl, owner, content):
+	def __init__(self, name, acl, owner, contents):
 		self.name = name
 		self.acl = acl #acl dictionary for all files/subdirectories, if file acl is {fn: <acl>}, else {fn:<acl>, subdir:<acl>,..}
 		self.owner = owner
-		self.content = content
+		self.contents = contents
 
 	def __str__:
 		return self.name
@@ -63,17 +63,17 @@ class Entry:
 
 
 class DirEntry(Entry):
-	def __init__(self, name, owner, acl, content):
+	def __init__(self, name, owner, acl, contents):
 		self.name = name
 		self.acl = acl #acl dictionaryfor all subdirectories {subdirname: <acl>, subdirname:<acl>}
 		self.owner = owner
-		self.content = content #[subdir DE and file FE]
+		self.contents = contents #[subdir DE and file FE]
 
 	def is_home(self, username):
 		return self.name == username
 
 	def add_file(self, file_entry):
-		self.content.append(file_entry)
+		self.contents.append(file_entry)
 
 	def get_acl(self):
 		return self.acl
@@ -95,17 +95,25 @@ class DirEntry(Entry):
 
 
 class FileEntry(Entry):
-	def __init__(self, name, owner, acl, file_content):
+	def __init__(self, name, owner, acl, file_contents):
 		self.name = name
 		self.acl = acl #just acl file
 		self.owner = owner 
-		self.content = file_content
+		self.contents = file_contents
 
 	def is_readable(self, username, name):
 		return self.acl.is_readable(username)
 	
 	def is_writable(self, username, name):
 		return self.acl.is_writable(username)
+
+	def get_acl(self):
+		return self.acl
+
+	def get_file(self):
+		return self.contents
+		
+
 
 
 class ACL:
