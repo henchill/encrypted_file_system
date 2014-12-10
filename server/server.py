@@ -48,12 +48,12 @@ class EFSServer:
 				N = long(pub["N"])
 				e = long(pub["e"])
 				rsa_pub = RSA.construct((N, e))
+				acl = data["acl"]
 
 				if verify_inner_dictionary(rsa_pub, signature, data):
 					print "Signature verfied. Registering user..."
-					resp = self.register(username, rsa_pub)
+					resp = self.register(username, rsa_pub, acl)
 					return resp
-
 			elif handler == "key":
 				pub = self.key.publickey()
 				okmsg = "Sending Server Key"
@@ -61,19 +61,22 @@ class EFSServer:
 				resp = OKResponse(okmsg)
 				return resp.getPayload({"public_key":{"N":pub.n, "e": pub.e}})
 
-			# FILE FUNCTIONS
+			# FILE FUNCTIONS (1)
 			elif handler == "create":
 				if verify_inner_signature(self.users[username], signature, data):
 					print "Signature verfied. Creating file..."
 					resp = self.create(username, data["filename"], data["file"], data["acl"])
-					return resp
+					#TO DO
+
 
 			elif handler == "delete":
 				print "Not implemented.."
 
+			#(2)	
 			elif handler == "read":
 				print "Not implemented.."
 
+			#(3)
 			elif handler == "write":
 				print "Not implemented.."
 
@@ -81,6 +84,7 @@ class EFSServer:
 				print "Not implemented.."
 
 			# DIRECTORY FUNCTIONS
+			#(4)
 			elif handler == "mkdir":
 				print "Not implemented.."
 
@@ -98,13 +102,14 @@ class EFSServer:
 			print "Couldn't find expected action. Please use --help to see possible commands."
 
 	
-	def register(self, username, pub_key):
+	def register(self, username, pub_key, acl):
 		if username in self.users:
 			errmsg = "User %s already exists" % username
 			return ErrorResponse(errmsg)
 
 		u = UserEntry(username, pub_key)
 		self.users[username] = u
+		self.files[username] = {}
 		okmsg = "Added user %s" % str(u)
 		print okmsg
 		data = {}
@@ -115,6 +120,24 @@ class EFSServer:
 		if username not in self.users:
 			errmsg =  "User %s not registered" % username
 			return ErrorResponse(errmsg)
+
+		#create file in sub directory
+		if len(filename) > 1:
+			#creating file in other directories, so path is [uname, path1, path2, fn]
+			if filename[0] is username:
+				
+
+			# creating file in own directory at supplied path [path1, path2, fn]
+			else:
+				if 
+
+		
+		# creating file in user home directory so just [fn]
+		else:
+
+
+		
+
 		#My code here.
 
 
