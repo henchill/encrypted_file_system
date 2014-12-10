@@ -95,6 +95,11 @@ class DirEntry(Entry):
 			names.append(e.name)
 		return names
 
+	def is_deletable(self):
+		for e in self.contents:
+			if e.name in self.acl():
+
+
 		
 class FileEntry(Entry):
 	def __init__(self, name, owner, acl, file_contents):

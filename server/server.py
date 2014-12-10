@@ -108,6 +108,10 @@ class EFSServer:
 
 			elif handler == "rename":
 				print "Not implemented.."
+				# if verify_inner_dictionary(self.users[username], signature, data):
+				# 	print "Signature verfied. Trying to create directory..."
+				# 	resp = self.rename(username, data["from"], data["to"])
+				# 	return resp
 
 			# DIRECTORY FUNCTIONS
 			elif handler == "mkdir":
@@ -117,17 +121,16 @@ class EFSServer:
 					return resp
 
 			elif handler == "remove":
-				print "Not implemented.."
+				if verify_inner_dictionary(self.users[username], signature, data):
+					print "Signature verfied. Trying to create directory..."
+					resp = self.delete_dir(username, data["dirname"])
+					return resp
 
 			elif handler == "ls":
 				if verify_inner_dictionary(self.users[username], signature, data):
 					print "Signature verfied. Trying to create directory..."
 					resp = self.list_contents(username, data["dirname"], data["acl"], data["signature_acl"])
 					return resp
-
-			elif handler == "cd":
-				print "Not implemented.."
-
 
 		except KeyError as ke:
 			print "Couldn't find expected action. Please use --help to see possible commands."
@@ -219,6 +222,7 @@ class EFSServer:
 		if username not in self.users:
 			errmsg =  "User %s not registered" % username
 			return ErrorResponse(errmsg)
+		data = {}
 		if (len(dirname) == 1):
 			for home_e in self.files:
 				if home_e.name = username:
@@ -232,7 +236,6 @@ class EFSServer:
 					return resp.getPayload(data)
 
 		(perm, msg, grandparent) = self.traverse(username, dirname[:-1])
-		data = {}
 		if perm: 
 			parent_name = dirname[-2]
 			parent_acl = grandparent.get_acl()[parent_name]
@@ -264,6 +267,45 @@ class EFSServer:
 		else:
 			print msg
 			resp = ErrorResponse(msg)
+			return resp.getPayload(data)
+
+	def delete_dir(self, username, dirname):
+		if username not in self.users:
+			errmsg =  "User %s not registered" % username
+			return ErrorResponse(errmsg)
+		data = {}
+		if (len(dirname) == 1):
+			for home_e in self.files:
+				if home_e.name = username:
+					parent = home_e
+					current_entry = parent.get_entry(dirname)
+					if current_entry.is_deletable():
+						parent.remove_dir(dirname)
+						deletemsg = "Created directory with dirname %s" % str(dirname)
+						print deletemsg
+						resp = OKResponse(deletemsg)
+						return resp.getPayload(data)
+					else:
+						errmsg = "Cannot delete directory. Insufficient permissions"
+						print errmsg
+						resp = ErrorResponse(errmsg)
+						return resp.getPayload(data)
+
+		(perm, msg, grandparent) = self.traverse(username, dirname[:-1])
+		if perm: 
+			parent_name = dirname[-2]
+			parent_acl = grandparent.get_acl()[parent_name]
+			if parent_acl.is_writable(username):
+				acl = ACL(dirname, signature_acl, dir_acl)
+				de = DirEntry(dirname, username, {}, [])
+				parent.add_dir(dirname, de, acl)
+				mkdirmsg = "Created directory with dirname %s" % str(dirname)
+				print mkdirmsg
+				resp = OKResponse(mkdirmsg)
+				return resp.getPayload(data)
+		else:
+			print msg
+			resp = ErrorResponse(msg)
 			return resp.getPayload(data)	
 
 	def list_contents(self, username, dirname):
@@ -284,6 +326,7 @@ class EFSServer:
 			print msg
 			resp = ErrorResponse(msg)
 			return resp.getPayload(data)
+
 
 
 	def traverse(self, username, filename):
