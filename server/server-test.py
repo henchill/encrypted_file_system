@@ -72,3 +72,56 @@ if __name__ == "__main__":
 		print "TEST %s: PASS" % test
 	else:
 		print "TEST %s: FAIL" % test
+
+	# TEST READ 1
+	test = "READ 1"
+	data = {"action": "read",
+	        "username": alice["username"],
+	        "filename": ["foo.txt"]}
+	        
+	req = {"username": alice["username"],
+	       "data": data,
+	       "signature": sign_inner_dictionary(alice["key"], data)}
+
+	resp = server.handle_request(req)
+	if "message" in resp:
+		print "TEST %s: PASS" % test
+		print "contents:", resp["data"]["file"]
+	else:
+		print "TEST %s: FAIL" % test
+	
+	# TEST WRITE
+	test = "WRITE"
+	data = {"action": "write",
+	        "username": alice["username"],
+	        "filename": ["foo.txt"],
+	        "file": "content is garply"}
+	        
+	req = {"username": alice["username"],
+	       "data": data,
+	       "signature": sign_inner_dictionary(alice["key"], data)}
+
+	resp = server.handle_request(req)
+	if "message" in resp:
+		print "TEST %s: PASS" % test
+	else:
+		print "TEST %s: FAIL" % test
+
+	# TEST READ 2
+	test = "READ 2"
+	data = {"action": "read",
+	        "username": alice["username"],
+	        "filename": ["foo.txt"]}
+	        
+	req = {"username": alice["username"],
+	       "data": data,
+	       "signature": sign_inner_dictionary(alice["key"], data)}
+
+	resp = server.handle_request(req)
+	if "message" in resp:
+		print "TEST %s: PASS" % test
+		contents = resp["data"]["file"]
+		print "contents:", contents
+	else:
+		print "TEST %s: FAIL" % test
+	

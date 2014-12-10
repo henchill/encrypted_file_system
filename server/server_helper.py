@@ -92,10 +92,10 @@ class FileEntry(Entry):
 		self.owner = owner 
 		self.contents = file_contents
 
-	def is_readable(self, username, name):
+	def is_readable(self, username):
 		return self.acl.is_readable(username)
 	
-	def is_writable(self, username, name):
+	def is_writable(self, username):
 		return self.acl.is_writable(username)
 
 	def get_acl(self):
@@ -131,8 +131,8 @@ class ACL:
 
 	def is_readable(self, user):
 		if user in self.table:
-			return self.table[user][ACL_READ] == "1"
+			return self.table[user][self.ACL_READ] == "1"
 
 	def is_writable(self, user):
 		if user in self.table:
-			return self.table[user][ACL_WRITE] == "1"
+			return self.table[user][self.ACL_WRITE] == "1"
