@@ -47,7 +47,7 @@ class Entry:
 		self.owner = owner
 		self.contents = contents
 
-	def __str__:
+	def __str__(self):
 		return self.name
 
 	def get_acl(self):

@@ -112,8 +112,7 @@ def verify_dictionary(key, d):
 def verify_inner_dictionary(key, signature, d):
 	"""Verifies the contents of the dictionary based on its signature."""
 
-	original = d.copy()
-	dict_str = json.dumps(original)
+	dict_str = json.dumps(d)
 	h = SHA.new()
 	h.update(dict_str)
 
@@ -132,4 +131,5 @@ def sign_inner_dictionary(key, d):
 	signer = PKCS1_PSS.new(key)
 
 	signature = signer.sign(h)
+
 	return base64.b64encode(signature)

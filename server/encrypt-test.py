@@ -70,6 +70,18 @@ try:
 	else:
 		print "TEST %d: FAIL" % test
 
+	# Test inner signature
+	test = 8
+	signature = sign_inner_dictionary(k, dictionary)
+	print "TEST %d: PASS" % test
+
+	# Test verify
+	test = 9
+	if verify_inner_dictionary(k, signature, dictionary):
+		print "TEST %d: PASS" % test
+	else:
+		print "TEST %d: FAIL" % test
+
 except Exception as e:
 	print "TEST %d: EXCEPTION: %s" % (test, str(e))
 	sys.exit(1)
