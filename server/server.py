@@ -85,7 +85,12 @@ class EFSServer:
 					return resp
 
 			elif handler == "delete":
-				print "Not implemented.."
+				user_pub = self.users[username].public_key
+				if verify_inner_dictionary(user_pub, signature, data):
+					print "Signature verfied. Trying to fetch file for read request..."
+					resp = self.delete_file(username, data["filename"])
+					return resp
+		
 	
 			elif handler == "read":
 				user_pub = self.users[username].public_key
@@ -115,7 +120,10 @@ class EFSServer:
 				print "Not implemented.."
 
 			elif handler == "ls":
-				print "Not implemented.."
+				if verify_inner_dictionary(self.users[username], signature, data):
+					print "Signature verfied. Trying to create directory..."
+					resp = self.list_contents(username, data["dirname"], data["acl"], data["signature_acl"])
+					return resp
 
 			elif handler == "cd":
 				print "Not implemented.."
@@ -216,7 +224,6 @@ class EFSServer:
 		if perm: 
 			parent_name = dirname[-2]
 			parent_acl = grandparent.get_acl()[parent_name]
-			parent_de = grandparent.get_entry(parent_name)
 			if parent_acl.is_writable(username):
 				acl = ACL(dirname, signature_acl, dir_acl)
 				de = DirEntry(dirname, username, {}, [])
@@ -230,6 +237,25 @@ class EFSServer:
 			resp = ErrorResponse(msg)
 			return resp.getPayload(data)	
 
+	def delete_file(self, username, filename):
+		if username not in self.users:
+			errmsg =  "User %s not registered" % username
+			return ErrorResponse(errmsg)
+		(perm, msg, parent) = self.traverse(username, filename)
+		data = {}
+		if perm:	
+			parent.delete_file(filename)
+			deletemsg = "File deleted with filename %s" % str(filename)
+			print deletemsg
+			resp = OKResponse(deletemsg)
+			return resp.getPayload(data)
+		else:
+			print msg
+			resp = ErrorResponse(msg)
+			return resp.getPayload(data)	
+
+
+	
 
 	def traverse(self, username, filename):
 		fn = filename

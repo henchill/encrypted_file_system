@@ -70,9 +70,6 @@ class DirEntry(Entry):
 	def is_home(self, username):
 		return self.name == username
 
-	def add_file(self, file_entry):
-		self.contents.append(file_entry)
-
 	def get_acl(self):
 		return self.acl
 
@@ -84,6 +81,14 @@ class DirEntry(Entry):
 	def add_dir(self, subdir_name, subdir_entry, subdir_acl):
 		self.acl[subdir_name] = subdir_acl
 		self.contents.append(subdir_entry)
+
+	def add_file(self, file_entry):
+		self.contents.append(file_entry)
+
+	def delete_file(self, filename):
+		e = self.get_entry(filename)
+		self.contents.remove(e)
+
 		
 class FileEntry(Entry):
 	def __init__(self, name, owner, acl, file_contents):
