@@ -41,10 +41,11 @@ class UserEntry:
 		return self.username
 
 class Entry:
-	def__init__(self, name, acl, owner):
-	self.name = name
-	self.acl = acl #acl dictionary for all files/subdirectories, if file acl is {fn: <acl>}, else {fn:<acl>, subdir:<acl>,..}
-	self.owner = owner
+	def __init__(self, name, acl, owner, content):
+		self.name = name
+		self.acl = acl #acl dictionary for all files/subdirectories, if file acl is {fn: <acl>}, else {fn:<acl>, subdir:<acl>,..}
+		self.owner = owner
+		self.content = content
 
 	def __str__:
 		return self.name
@@ -58,55 +59,79 @@ class Entry:
 	def get_name(self):
 		return self.name
 
+
+
+
 class DirEntry(Entry):
-	def __init__(self, name, acl, owner):
+	def __init__(self, name, owner, acl, content):
 		self.name = name
 		self.acl = acl #acl dictionaryfor all subdirectories {subdirname: <acl>, subdirname:<acl>}
 		self.owner = owner
-		
-	def is_dir(self):
-		return True
+		self.content = content #[subdir DE and file FE]
 
-	def is_file(self):
-		return False
+	def is_home(self, username):
+		return self.name == username
+
+	def add_file(self, file_entry):
+		self.content.append(file_entry)
+
+	def get_acl(self):
+		return self.acl
+
+	def get_entry(self, name):
+		for e in self.contents:
+			if e.name == name:
+				return e
 
 	def subdir_is_readable(self, username, subdir_name):
-		return self.acl[subdir_name].is_readable(username);
+		return self.child_acls[subdir_name].is_readable(username);
 
 	def subdir_is_writeable(self, username, subdir_name):
-		return self.acl[subdir_name].is_readable(username);
+		return self.child_acls[subdir_name].is_readable(username);
 
 	# def is_descendable(self, username):
 	# 	return self.acl.is_readable(username)
 
 
+
 class FileEntry(Entry):
-	def __init__(self, name, acl, owner):
+	def __init__(self, name, owner, acl, file_content):
 		self.name = name
 		self.acl = acl #just acl file
 		self.owner = owner 
-
-	def is_file(self):
-		return True
-
-	def is_dir(self):
-		return False
+		self.content = file_content
 
 	def is_readable(self, username, name):
-		return self.acl[name].is_readable(username)
+		return self.acl.is_readable(username)
 	
 	def is_writable(self, username, name):
-		return self.acl[name].is_writable(username)
+		return self.acl.is_writable(username)
 
 
-class ACL():
-	def __init__(self, acl):
-		self.acl = acl #{un1:{perm, sk}, un2:{perm, sk}}
+class ACL:
+	filename = None
+	table = None
+	signature = None
 
-	def get_users(self):
-		return acl.keys()
+	ACL_READ = 0
+	ACL_WRITE = 1
 
-	def get_users_readable(self):
+	def __init__(self, filename, signature, table):
+		self.filename = filename
+		self.table = table
+		self.signature = signature
 
+	def is_valid(self, key):
+		if self.signature is None:
+			return False
 
+		representation = {"filename": self.filename, "table": self.table}
+		return verify_inner_dictionary(key, self.signature, representation)
 
+	def is_readable(self, user):
+		if user in self.table:
+			return self.table[user][ACL_READ] == "1"
+
+	def is_writable(self, user):
+		if user in self.table:
+			return self.table[user][ACL_WRITE] == "1"

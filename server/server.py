@@ -18,7 +18,7 @@ port = 1025
 use_threaded = False
 efs_server = None
 
-
+root = 'root'
 # Crypto parameters
 RSA_KEY_SIZE = 2048
 
@@ -31,7 +31,8 @@ class EFSServer:
 	def __init__(self):
 		self.key = RSA.generate(RSA_KEY_SIZE)
 		self.users = {}
-		self.files = {}
+		self.files = []
+		self.home_acls = {}
 
 	def handle_request(self, req):
 		print "I am supposed to handle:", str(req)
@@ -50,10 +51,11 @@ class EFSServer:
 				e = long(pub["e"])
 				rsa_pub = RSA.construct((N, e))
 				acl = data["acl"]
+				acl_signature = data["signature_acl"]
 
 				if verify_inner_dictionary(rsa_pub, signature, data):
 					print "Signature verfied. Registering user..."
-					resp = self.register(username, rsa_pub, acl)
+					resp = self.register(username, rsa_pub, acl, acl_signature)
 					return resp
 			elif handler == "key":
 				pub = self.key.publickey()
@@ -67,8 +69,7 @@ class EFSServer:
 				if verify_inner_signature(self.users[username], signature, data):
 					print "Signature verfied. Creating file..."
 					resp = self.create(username, data["filename"], data["file"], data["acl"])
-					#TO DO
-
+					return resp
 
 			elif handler == "delete":
 				print "Not implemented.."
@@ -103,76 +104,68 @@ class EFSServer:
 			print "Couldn't find expected action. Please use --help to see possible commands."
 
 	
-	def register(self, username, pub_key, acl):
+	def register(self, username, pub_key, table, signature):
 		if username in self.users:
 			errmsg = "User %s already exists" % username
 			return ErrorResponse(errmsg)
 
 		u = UserEntry(username, pub_key)
 		self.users[username] = u
-		self.files[username] = {}
 		okmsg = "Added user %s" % str(u)
 		print okmsg
+		self.home_acls{username} = ACL(username, table, signature)
+		home_dir = DirEntry(username, username, {}, [])
+		self.files.append(home_dir)
+		filemsg = "Added home directory for user %s" % str(username)
+		print filemsg
 		data = {}
 		resp = OKResponse(okmsg)
 		return resp.getPayload(data)
 
-	def create(self, username, filename, file, acl):
+	def create(self, username, filename, file_content, file_acl):
 		if username not in self.users:
 			errmsg =  "User %s not registered" % username
 			return ErrorResponse(errmsg)
 
-		#create file in sub directory
-		if len(filename) > 1:
-			#creating file in other directories, so path is [uname, path1, path2, fn]
-			if filename[0] is username:
-				
+		fn = filename
+		current_dir = None
 
-			# creating file in own directory at supplied path [path1, path2, fn]
+		# if creating in own dir, add uname
+		if (filename[0] not in self.users):
+			fn.insert(0,username)
+			
+		while (len(fn)>1):
+			current_name = fn.pop(0)
+			if (current_name in self.users):
+				home_acl = self.home_acls[current_name]
+				if (home_acl.is_readable(username) == False):
+					errmsg =  "Permission denied %s" % current_name
+					return ErrorResponse(errmsg)
+				else:
+					for e in self.files:
+						if e.name == username:
+							current_dir = e
+					continue
 			else:
-				if 
+				current_acl = current_dir.get_acl()[current_name]
+				if (current_acl.is_readable(username) == False):
+					errmsg =  "Permission denied %s" % current_name
+					return ErrorResponse(errmsg)
+				else:
+					current_dir = current_dir.get_entry(current_name)
+					continue
 
-		
-		# creating file in user home directory so just [fn]
-		else:
+		#Made it here => can create file in current_dir
+		fe = FileEntry(filename, username, file_acl, file_content)
+		current_dir.add_file(fe)
+
+		createmsg = "File created with name %s" % str(filename)
+		print createmsg
+		data = {}
+		resp = OKResponse(filemsg)
+		return resp.getPayload(data)
 
 
-		
-
-		#My code here.
-
-
-class ACL:
-	filename = None
-	table = None
-	signature = None
-
-	ACL_READ = 0
-	ACL_WRITE = 1
-
-	def __init__(self, filename):
-		self.filename = filename
-		self.table = {}
-		self.signature = None
-
-	def is_valid(self, key):
-		if self.signature is None:
-			return False
-
-		representation = {"filename": self.filename, "table": self.table}
-		return verify_inner_dictionary(key, self.signature, representation)
-
-	def set_signature(self, signature):
-		self.signature = signature
-
-	def set_table(self, table):
-		self.table = table
-
-	def is_readable(self, user):
-		return self.table[user][ACL_READ] == "1"
-
-	def is_writable(self, user):
-		return self.table[user][ACL_WRITE] == "1"
 
 
 class EFSHandler(SocketServer.BaseRequestHandler):
