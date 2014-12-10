@@ -47,15 +47,30 @@ class EFSConnection:
 			print packet_string
 			packet_seq += 1
 
+	def transmit_plaintext(self, plaintext):
+		"""Send a string *unencrypted* through a socket."""
+
+		packet_seq = 0
+		chunk_size = 800
+
+		for start in xrange(0, len(plaintext), chunk_size):
+			end = start + chunk_size
+			packet = {"seq": packet_seq, "count": packet_count, "payload": plaintext[start:end]}
+			packet_json = json.dumps(packet)
+
+			# Prepend packet length to packet (not including length string itself)
+			length = len(packet_json)
+			packet_string = str(length) + packet_json
+
+			self.connection.send(packet_string)
+			print packet_string
+			packet_seq += 1
+
 	def transmit_encrypted(self, key, text):
 		"""Send a string encrypted on key through a socket."""
 
 		ciphertexts = encrypt(key, text)
 		self.transmit_ciphertexts(ciphertexts)
-
-	def transmit_plaintext(self, text):
-		"""Send a string *unencrypted* through a socket."""
-		self.connection.sendall(text)
 
 	def receive(self, size):
 		return self.connection.recv(size)
