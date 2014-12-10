@@ -205,15 +205,29 @@ class EFSServer:
 			return resp.getPayload(data)
 
 
-	def mkdir(self, username, dirname, acl, signature_acl):
+	def mkdir(self, username, dirname, dir_acl, signature_acl):
 		if username not in self.users:
 			errmsg =  "User %s not registered" % username
 			return ErrorResponse(errmsg)
-		(perm, msg, parent) = self.traverse(username, filename[:-1])
-		if read_perm:
-			(perm, msg, parent) = self,traverse(username, parent)
-
+		(perm, msg, grandparent) = self.traverse(username, dirname[:-1])
 		data = {}
+		if perm: 
+			parent_name = dirname[-2]
+			parent_acl = grandparent.get_acl()[parent_name]
+			parent_de = grandparent.get_entry(parent_name)
+			if parent_acl.is_writable(username):
+				acl = ACL(dirname, signature_acl, dir_acl)
+				de = DirEntry(dirname, username, {}, [])
+				parent.add_dir(dirname, de, acl)
+				mkdirmsg = "Created directory with dirname %s" % str(dirname)
+				print mkdirmsg
+				resp = OKResponse(mkdirmsg)
+				return resp.getPayload(data)
+		else:
+			print msg
+			resp = ErrorResponse(msg)
+			return resp.getPayload(data)	
+
 
 	def traverse(self, username, filename):
 		fn = filename

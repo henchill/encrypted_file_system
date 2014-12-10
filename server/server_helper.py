@@ -81,6 +81,10 @@ class DirEntry(Entry):
 			if e.name == name:
 				return e
 
+	def add_dir(self, subdir_name, subdir_entry, subdir_acl):
+		self.acl[subdir_name] = subdir_acl
+		self.contents.append(subdir_entry)
+		
 class FileEntry(Entry):
 	def __init__(self, name, owner, acl, file_contents):
 		self.name = name
