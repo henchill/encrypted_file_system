@@ -81,7 +81,7 @@ class EFSServer:
 				user_pub = self.users[username].public_key
 				if verify_inner_dictionary(user_pub, signature, data):
 					print "Signature verfied. Creating file..."
-					resp = self.create(username, data["filename"], data["file"], data["acl"])
+					resp = self.create(username, data["filename"], data["file"], data["acl"], data["signature_acl"])
 					return resp
 
 			elif handler == "delete":
@@ -143,7 +143,7 @@ class EFSServer:
 		resp = OKResponse(okmsg)
 		return resp.getPayload(data)
 
-	def create(self, username, filename, file_content, file_acl, acl_signature):
+	def create(self, username, filename, file_content, file_acl, signature_acl):
 		if username not in self.users:
 			errmsg =  "User %s not registered" % username
 			return ErrorResponse(errmsg)
@@ -151,7 +151,7 @@ class EFSServer:
 		data = {}
 		if perm:	
 			#Made it here => can create file in parent
-			acl = ACL(filename, acl_signature, file_acl)
+			acl = ACL(filename, signature_acl, file_acl)
 			fe = FileEntry(filename, username, acl, file_content)
 			parent.add_file(fe)
 			createmsg = "File created with filename %s" % str(filename)
