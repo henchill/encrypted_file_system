@@ -106,7 +106,7 @@ class EFSServer:
 			elif handler == "mkdir":
 				if verify_inner_dictionary(self.users[username], signature, data):
 					print "Signature verfied. Trying to create directory..."
-					resp = self.mkdir(username, data["filename"], data["file"], data["acl"], data["signature_acl"])
+					resp = self.mkdir(username, data["dirname"], data["acl"], data["signature_acl"])
 					return resp
 
 			elif handler == "remove":
@@ -204,6 +204,16 @@ class EFSServer:
 			resp = ErrorResponse(msg)
 			return resp.getPayload(data)
 
+
+	def mkdir(self, username, dirname, acl, signature_acl):
+		if username not in self.users:
+			errmsg =  "User %s not registered" % username
+			return ErrorResponse(errmsg)
+		(perm, msg, parent) = self.traverse(username, filename[:-1])
+		if read_perm:
+			(perm, msg, parent) = self,traverse(username, parent)
+
+		data = {}
 
 	def traverse(self, username, filename):
 		fn = filename
