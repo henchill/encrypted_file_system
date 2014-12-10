@@ -58,6 +58,11 @@ class EFSServer:
 			elif handler == "key":
 				pub = self.key.publickey()
 				okmsg = "Sending Server Key"
+				for user in users:
+					if username == user.name:
+						pub = user.public_key
+						okmsg = "Sending public key of user %s" % username
+
 				print okmsg
 				resp = OKResponse(okmsg)
 				return resp.getPayload({"public_key":{"N":pub.n, "e": pub.e}})
