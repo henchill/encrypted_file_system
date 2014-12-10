@@ -51,5 +51,21 @@ if __name__ == "__main__":
 		print "TEST %s: FAIL" % test
 
 	#TEST CREATE
+	test="CREATE"
+	req = {}
+	data = {}
 
+	data["action"] = "create"
+	data["username"] = alice["username"]
+	data["filename"] = ["alice", "foo.txt"]
+	data["file"] = "content is bar"
+	data["acl"] = {alice["username"]: "11"}
 
+	req["username"] = alice["username"]
+	req["data"] = data
+	req["signature"] = sign_inner_dictionary(alice["key"], data)
+	resp = server.handle_request(req)
+	if "message" in resp:
+		print "TEST %s: PASS" % test
+	else:
+		print "TEST %s: FAIL" % test
