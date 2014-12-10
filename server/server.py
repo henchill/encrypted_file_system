@@ -108,10 +108,6 @@ class EFSServer:
 
 			elif handler == "rename":
 				print "Not implemented.."
-				# if verify_inner_dictionary(self.users[username], signature, data):
-				# 	print "Signature verfied. Trying to create directory..."
-				# 	resp = self.rename(username, data["from"], data["to"])
-				# 	return resp
 
 			# DIRECTORY FUNCTIONS
 			elif handler == "mkdir":
