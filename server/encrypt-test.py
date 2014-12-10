@@ -70,6 +70,22 @@ try:
 	else:
 		print "TEST %d: FAIL" % test
 
+	# Test AES encryption
+	test = 8
+	(ciphertext, iv) = encrypt_aes(b'Sixteen byte key', reference)
+	if ciphertext is not None and iv is not None:
+		print "TEST %d: PASS" % test
+	else:
+		print "TEST %d: FAIL" % test
+	
+	# Test AES decryption
+	test = 9
+	plaintext = decrypt_aes(b'Sixteen byte key', iv, ciphertext)
+	if plaintext == reference:
+		print "TEST %d: PASS" % test
+	else:
+		print "TEST %d: FAIL" % test
+
 except Exception as e:
 	print "TEST %d: EXCEPTION: %s" % (test, str(e))
 	sys.exit(1)
