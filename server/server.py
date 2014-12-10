@@ -219,6 +219,18 @@ class EFSServer:
 		if username not in self.users:
 			errmsg =  "User %s not registered" % username
 			return ErrorResponse(errmsg)
+		if (len(dirname) == 1):
+			for home_e in self.files:
+				if home_e.name = username:
+					parent = home_e
+					acl = ACL(dirname, signature_acl, dir_acl)
+					de = DirEntry(dirname, username, {}, [])
+					parent.add_dir(dirname, de, acl)
+					mkdirmsg = "Created directory with dirname %s" % str(dirname)
+					print mkdirmsg
+					resp = OKResponse(mkdirmsg)
+					return resp.getPayload(data)
+
 		(perm, msg, grandparent) = self.traverse(username, dirname[:-1])
 		data = {}
 		if perm: 
@@ -254,8 +266,25 @@ class EFSServer:
 			resp = ErrorResponse(msg)
 			return resp.getPayload(data)	
 
+	def list_contents(self, username, dirname):
+		if username not in self.users:
+			errmsg =  "User %s not registered" % username
+			return ErrorResponse(errmsg)
+		(perm, msg, parent) = self.traverse(username, dirname)
+		data = {}
+		if perm:
+			de = parent.get_entry(dirname)
+			if de.is_readable(username):
+				data["contents"] = de.get_names()
+				lsmsg = "Sending list of contents in directory with name %s" % str(dirname)
+				print lsmsg
+				resp = OKResponse(readmsg)
+				return resp.getPayload(data)
+		else:
+			print msg
+			resp = ErrorResponse(msg)
+			return resp.getPayload(data)
 
-	
 
 	def traverse(self, username, filename):
 		fn = filename

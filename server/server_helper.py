@@ -89,6 +89,12 @@ class DirEntry(Entry):
 		e = self.get_entry(filename)
 		self.contents.remove(e)
 
+	def get_names(self):
+		var names = []
+		for e in self.contents:
+			names.append(e.name)
+		return names
+
 		
 class FileEntry(Entry):
 	def __init__(self, name, owner, acl, file_contents):
