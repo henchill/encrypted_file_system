@@ -44,7 +44,7 @@ class EFSConnection:
 			packet_string = str(length) + packet_json
 
 			self.connection.send(packet_string)
-			# print packet_string
+			print packet_string
 			packet_seq += 1
 
 	def transmit(self, key, text):

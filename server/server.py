@@ -6,16 +6,35 @@ import socket
 import threading
 import SocketServer
 
+from encrypt import *
+from Crypto.PublicKey import RSA
+
 buffer_size = 1024
 host = "localhost"
 servername = "efs-server"
 port = 1025
 
+key_size = 2048
 use_threaded = False
 
 efs_server = None
 
 class EFSServer:
+	key = None
+
+	def __init__(self):
+		try:
+			keyfile = open("server.key", "r")
+			self.key = RSA.importKey(keyfile.read())
+		except IOError as e:
+			print "No server.key file, making one."
+			keyfile = open("server.key", "w")
+			self.key = RSA.generate(key_size)
+			keyfile.write(self.key.exportKey("PEM"))
+			keyfile.close()
+
+		print "Public key (N,e) is (%lu,%lu)" % (self.key.n, self.key.e)
+
 	def handle_request(self, request):
 		print "I am supposed to handle:", str(request)
 
@@ -69,13 +88,14 @@ class EFSHandler(SocketServer.BaseRequestHandler):
 
 	def handle(self):
 		data = self.receive()
-		if use_threaded:
-			cur_thread = threading.current_thread()
-			response = "{} responds, {}".format(cur_thread.name, data)
-		else:
-			response = "Server responds: {}".format(data)
-		efs_server.handle_request(data)
-		self.request.sendall(response)
+		plaintext = decrypt(efs_server.key, data)
+		# if use_threaded:
+		#	cur_thread = threading.current_thread()
+		#	response = "{} responds, {}".format(cur_thread.name, data)
+		# else:
+		#	response = "Server responds: {}".format(data)
+		efs_server.handle_request(plaintext)
+		# self.request.sendall(response)
 
 if __name__ == "__main__":
 	efs_server = EFSServer()
