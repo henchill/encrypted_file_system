@@ -1,5 +1,6 @@
 #!/usr/bin/env python2.7
 
+import json
 import time
 import socket
 import threading
@@ -141,8 +142,37 @@ class EFSServer:
 		#My code here.
 
 
+class ACL:
+	filename = None
+	table = None
+	signature = None
 
+	ACL_READ = 0
+	ACL_WRITE = 1
 
+	def __init__(self, filename):
+		self.filename = filename
+		self.table = {}
+		self.signature = None
+
+	def is_valid(self, key):
+		if self.signature is None:
+			return False
+
+		representation = {"filename": self.filename, "table": self.table}
+		return verify_inner_dictionary(key, self.signature, representation)
+
+	def set_signature(self, signature):
+		self.signature = signature
+
+	def set_table(self, table):
+		self.table = table
+
+	def is_readable(self, user):
+		return self.table[user][ACL_READ] == "1"
+
+	def is_writable(self, user):
+		return self.table[user][ACL_WRITE] == "1"
 
 
 class EFSHandler(SocketServer.BaseRequestHandler):
