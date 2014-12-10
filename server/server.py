@@ -88,13 +88,15 @@ class EFSServer:
 				print "Not implemented.."
 	
 			elif handler == "read":
-				if verify_inner_dictionary(self.users[username], signature, data):
+				user_pub = self.users[username].public_key
+				if verify_inner_dictionary(user_pub, signature, data):
 					print "Signature verfied. Trying to fetch file for read request..."
 					resp = self.read(username, data["filename"])
 					return resp
 		
 			elif handler == "write":
-				if verify_inner_dictionary(self.users[username], signature, data):
+				user_pub = self.users[username].public_key
+				if verify_inner_dictionary(user_pub, signature, data):
 					print "Signature verfied. Trying to fetch file for write request..."
 					resp = self.write(username, data["filename"], data["file"])
 					return resp
