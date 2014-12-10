@@ -60,8 +60,6 @@ class Entry:
 		return self.name
 
 
-
-
 class DirEntry(Entry):
 	def __init__(self, name, owner, acl, contents):
 		self.name = name
@@ -83,17 +81,6 @@ class DirEntry(Entry):
 			if e.name == name:
 				return e
 
-	def subdir_is_readable(self, username, subdir_name):
-		return self.child_acls[subdir_name].is_readable(username);
-
-	def subdir_is_writeable(self, username, subdir_name):
-		return self.child_acls[subdir_name].is_readable(username);
-
-	# def is_descendable(self, username):
-	# 	return self.acl.is_readable(username)
-
-
-
 class FileEntry(Entry):
 	def __init__(self, name, owner, acl, file_contents):
 		self.name = name
@@ -110,9 +97,11 @@ class FileEntry(Entry):
 	def get_acl(self):
 		return self.acl
 
-	def get_file(self):
+	def get_contents(self):
 		return self.contents
-		
+
+	def set_contents(self, new_contents):
+		self.contents = new_contents
 
 
 

@@ -69,34 +69,37 @@ class EFSServer:
 				resp = OKResponse(okmsg)
 				return resp.getPayload({"public_key":{"N":pub.n, "e": pub.e}})
 
-			# FILE FUNCTIONS (1)
+			# FILE FUNCTIONS
 			elif handler == "create":
 				if verify_inner_signature(self.users[username], signature, data):
-					print "Signature verfied. Creating file..."
+					print "Signature verfied. Trying to create file..."
 					resp = self.create(username, data["filename"], data["file"], data["acl"])
 					return resp
 
 			elif handler == "delete":
 				print "Not implemented.."
-
-			#(2)	
+	
 			elif handler == "read":
 				if verify_inner_dictionary(self.users[username], signature, data):
-					print "Signature verfied. Trying to read file..."
+					print "Signature verfied. Trying to fetch file for read request..."
 					resp = self.read(username, data["filename"])
 					return resp
 		
-			#(3)
 			elif handler == "write":
-				print "Not implemented.."
+				if verify_inner_dictionary(self.users[username], signature, data):
+					print "Signature verfied. Trying to fetch file for write request..."
+					resp = self.write(username, data["filename"], data["file"])
+					return resp
 
 			elif handler == "rename":
 				print "Not implemented.."
 
 			# DIRECTORY FUNCTIONS
-			#(4)
 			elif handler == "mkdir":
-				print "Not implemented.."
+				if verify_inner_dictionary(self.users[username], signature, data):
+					print "Signature verfied. Trying to create directory..."
+					resp = self.mkdir(username, data["filename"], data["file"], data["acl"], data["signature_acl"])
+					return resp
 
 			elif handler == "remove":
 				print "Not implemented.."
@@ -130,7 +133,7 @@ class EFSServer:
 		resp = OKResponse(okmsg)
 		return resp.getPayload(data)
 
-	def create(self, username, filename, file_content, file_acl):
+	def create(self, username, filename, file_content, file_acl, acl_signature):
 		if username not in self.users:
 			errmsg =  "User %s not registered" % username
 			return ErrorResponse(errmsg)
@@ -138,7 +141,8 @@ class EFSServer:
 		data = {}
 		if perm:	
 			#Made it here => can create file in parent
-			fe = FileEntry(filename, username, file_acl, file_content)
+			acl = ACL(filename, acl_signature, file_acl)
+			fe = FileEntry(filename, username, acl, file_content)
 			current_dir.add_file(fe)
 			createmsg = "File created with filename %s" % str(filename)
 			print createmsg
@@ -160,16 +164,36 @@ class EFSServer:
 			fe = parent.get_entry(filename)
 			if fe.is_readable(username):
 				data["filename"] = filename
-				data["file"] = fe.get_file()
-				data["acl"] = fe.get_acl()
-			readmsg = "Sending file for Read with filename %s" % str(filename)
-			print readmsg
-			resp = OKResponse(readmsg)
-			return resp.getPayload(data)
+				data["file"] = fe.get_contents()
+				readmsg = "Sending file for Read with filename %s" % str(filename)
+				print readmsg
+				resp = OKResponse(readmsg)
+				return resp.getPayload(data)
 		else:
 			print msg
 			resp = ErrorResponse(msg)
 			return resp.getPayload(data)
+
+	def write(self, username, filename, file_contents):
+		if username not in self.users:
+			errmsg =  "User %s not registered" % username
+			return ErrorResponse(errmsg)
+		(perm, msg, parent) = self.traverse(username, filename)
+		data = {}
+		if perm:	
+			#Made it here => can write file in parent
+			fe = parent.get_entry(filename)
+			if fe.is_writable(username):
+				fe.set_contents(file_contents)
+				writemsg = "Writing to file complete for filename %s" % str(filename)
+				print writemsg
+				resp = OKResponse(writemsg)
+				return resp.getPayload(data)
+		else:
+			print msg
+			resp = ErrorResponse(msg)
+			return resp.getPayload(data)
+
 
 	def traverse(self, username, filename):
 		fn = filename
