@@ -44,7 +44,9 @@ class EFSConnection:
 
 	def transmit(self, key, text):
 		"""Send a string encrypted on key through a socket."""
-
-		ciphertexts = encrypt(key, text)
+        if (key != None):
+            ciphertexts = encrypt(key, text)
+        else:
+            ciphertexts = [text]
 		self.transmit_ciphertexts(ciphertexts)
 

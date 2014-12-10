@@ -8,7 +8,6 @@ class User():
     def __init__(self, username, rsa_key):
         self.username = username
         self.rsa_key = rsa_key
-        self.shared_keys = {} # key: filename value: shared key
 
     def get_public_key(self):
         return self.rsa_key.publickey().exportKey("PEM")
