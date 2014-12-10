@@ -62,6 +62,7 @@ if __name__ == "__main__":
 	data["filename"] = ["foo.txt"]
 	data["file"] = "content is bar"
 	data["acl"] = {alice["username"]: "11"}
+	data["signature_acl"] = sign_inner_dictionary(alice["key"], data["acl"])
 
 	req["username"] = alice["username"]
 	req["data"] = data
