@@ -47,9 +47,15 @@ class EFSConnection:
 			print packet_string
 			packet_seq += 1
 
-	def transmit(self, key, text):
+	def transmit_encrypted(self, key, text):
 		"""Send a string encrypted on key through a socket."""
 
 		ciphertexts = encrypt(key, text)
 		self.transmit_ciphertexts(ciphertexts)
 
+	def transmit_plaintext(self, text):
+		"""Send a string *unencrypted* through a socket."""
+		self.connection.sendall(text)
+
+	def receive(self, size):
+		return self.connection.recv(size)
