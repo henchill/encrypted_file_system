@@ -279,30 +279,40 @@ class EFSServer:
 				if home_e.name = username:
 					parent = home_e
 					current_entry = parent.get_entry(dirname)
-					if current_entry.is_deletable():
-						parent.remove_dir(dirname)
-						deletemsg = "Created directory with dirname %s" % str(dirname)
+					if current_entry.is_deletable(username):
+						parent.delete_dir(dirname)
+						deletemsg = "Removed directory with dirname %s" % str(dirname)
 						print deletemsg
 						resp = OKResponse(deletemsg)
-						return resp.getPayload(data)
+						return resp.getPayload({})
 					else:
 						errmsg = "Cannot delete directory. Insufficient permissions"
 						print errmsg
 						resp = ErrorResponse(errmsg)
-						return resp.getPayload(data)
+						return resp.getPayload({})
 
 		(perm, msg, grandparent) = self.traverse(username, dirname[:-1])
 		if perm: 
 			parent_name = dirname[-2]
 			parent_acl = grandparent.get_acl()[parent_name]
 			if parent_acl.is_writable(username):
-				acl = ACL(dirname, signature_acl, dir_acl)
-				de = DirEntry(dirname, username, {}, [])
-				parent.add_dir(dirname, de, acl)
-				mkdirmsg = "Created directory with dirname %s" % str(dirname)
-				print mkdirmsg
-				resp = OKResponse(mkdirmsg)
-				return resp.getPayload(data)
+				current_entry = parent.get_entry(dirname)
+				if current_entry.is_deletable(username):
+						parent.delete_dir(dirname)
+						deletemsg = "Removed directory with dirname %s" % str(dirname)
+						print deletemsg
+						resp = OKResponse(deletemsg)
+						return resp.getPayload({})
+					else:
+						errmsg = "Cannot delete directory. Insufficient permissions"
+						print errmsg
+						resp = ErrorResponse(errmsg)
+						return resp.getPayload({})
+			else: 
+				errmsg1 = "Cannot delete directory. Insufficient permissions"
+				print errmsg1
+				resp = ErrorResponse(errmsg1)
+				return resp.getPayload({})
 		else:
 			print msg
 			resp = ErrorResponse(msg)

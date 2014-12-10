@@ -95,12 +95,21 @@ class DirEntry(Entry):
 			names.append(e.name)
 		return names
 
-	def is_deletable(self):
+	def is_deletable(self, username):
 		for e in self.contents:
-			if e.name in self.acl():
+			if e.name in self.acl: #is subdir
+				if (self.acl[e.name].is_writable(username) == False):
+					return False
+			else: #is file
+				if (e.get_acl().is_writable(username) == False):
+					return False
+		return True
 
+	def delete_dir(self, subdir_name):
+		de = self.get_entry(subdir_name)
+		del self.acl[subdir_name]
+		self.contents.remove(de)
 
-		
 class FileEntry(Entry):
 	def __init__(self, name, owner, acl, file_contents):
 		self.name = name
