@@ -9,6 +9,8 @@ from encrypt import *
 from Crypto.PublicKey import RSA
 from server_helper import *
 
+import traceback
+
 # Server socket parameters
 buffer_size = 1024
 host = "localhost"
@@ -35,7 +37,7 @@ class EFSServer:
 		self.home_acls = {}
 
 	def handle_request(self, req):
-		print "I am supposed to handle:", str(req)
+		# print "I am supposed to handle:", str(req)
 
 		try:
 			handler = req["data"]["action"]
@@ -57,13 +59,18 @@ class EFSServer:
 					print "Signature verfied. Registering user..."
 					resp = self.register(username, rsa_pub, acl, acl_signature)
 					return resp
+				else:
+					errmsg = "Signature verification failed, could not register."
+					print errmsg
+
 			elif handler == "key":
 				pub = self.key.publickey()
 				okmsg = "Sending Server Key"
-				for user in users:
-					if username == user.name:
-						pub = user.public_key
-						okmsg = "Sending public key of user %s" % username
+				if username in self.users:
+					pub = self.users[username].public_key
+					okmsg = "Sending public key of user %s" % username
+				else:
+					resp = ErrorResponse("No user name %s exists" % username)
 
 				print okmsg
 				resp = OKResponse(okmsg)
@@ -71,8 +78,9 @@ class EFSServer:
 
 			# FILE FUNCTIONS
 			elif handler == "create":
-				if verify_inner_signature(self.users[username], signature, data):
-					print "Signature verfied. Trying to create file..."
+				user_pub = self.users[username].public_key
+				if verify_inner_dictionary(user_pub, signature, data):
+					print "Signature verfied. Creating file..."
 					resp = self.create(username, data["filename"], data["file"], data["acl"])
 					return resp
 
@@ -113,9 +121,11 @@ class EFSServer:
 
 		except KeyError as ke:
 			print "Couldn't find expected action. Please use --help to see possible commands."
+			print ke
+			print traceback.format_exc()
 
 	
-	def register(self, username, pub_key, table, signature):
+	def register(self, username, pub_key, table, acl_signature):
 		if username in self.users:
 			errmsg = "User %s already exists" % username
 			return ErrorResponse(errmsg)
@@ -124,7 +134,7 @@ class EFSServer:
 		self.users[username] = u
 		okmsg = "Added user %s" % str(u)
 		print okmsg
-		self.home_acls{username} = ACL(username, table, signature)
+		self.home_acls[username] = ACL(username, table, acl_signature)
 		home_dir = DirEntry(username, username, {}, [])
 		self.files.append(home_dir)
 		filemsg = "Added home directory for user %s" % str(username)
@@ -143,7 +153,7 @@ class EFSServer:
 			#Made it here => can create file in parent
 			acl = ACL(filename, acl_signature, file_acl)
 			fe = FileEntry(filename, username, acl, file_content)
-			current_dir.add_file(fe)
+			parent.add_file(fe)
 			createmsg = "File created with filename %s" % str(filename)
 			print createmsg
 			resp = OKResponse(createmsg)
@@ -203,6 +213,8 @@ class EFSServer:
 		if (filename[0] not in self.users):
 			fn.insert(0,username)
 			
+		print "filename:", fn
+
 		while (len(fn)>1):
 			current_name = fn.pop(0)
 			if (current_name in self.users):
@@ -216,7 +228,11 @@ class EFSServer:
 							current_dir = e
 					continue
 			else:
-				current_acl = current_dir.get_acl()[current_name]
+				current_acls = current_dir.get_acl()
+				if current_name not in current_acls:
+					errmsg = "File doesn't exist, %s" % current_name
+					return (False, errmsg)
+				current_acl = current_acl[current_name]
 				if (current_acl.is_readable(username) == False):
 					errmsg =  "Permission denied %s" % current_name
 					return (False, errmsg)

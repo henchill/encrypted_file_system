@@ -1,3 +1,4 @@
+#!/usr/bin/env python2.7
 
 from Crypto.PublicKey import RSA
 from server import *
@@ -21,9 +22,10 @@ if __name__ == "__main__":
 	
 	data["action"] = "register"
 	data["username"] = alice["username"]
-	data["public_key"] = {"N":alice["key"].publickey().n, "e":alice["key"].publickey().e}
+	data["public_key"] = {"N":alice["key"].n, "e":alice["key"].e}
+	data["acl"] = {alice["username"]: "11"}
+	data["signature_acl"] = sign_inner_dictionary(alice["key"], data["acl"])
 
-	
 	req["username"]= alice["username"]
 	req["data"] = data
 	req["signature"] = sign_inner_dictionary(alice["key"], data)
@@ -51,5 +53,21 @@ if __name__ == "__main__":
 		print "TEST %s: FAIL" % test
 
 	#TEST CREATE
+	test="CREATE"
+	req = {}
+	data = {}
 
+	data["action"] = "create"
+	data["username"] = alice["username"]
+	data["filename"] = ["foo.txt"]
+	data["file"] = "content is bar"
+	data["acl"] = {alice["username"]: "11"}
 
+	req["username"] = alice["username"]
+	req["data"] = data
+	req["signature"] = sign_inner_dictionary(alice["key"], data)
+	resp = server.handle_request(req)
+	if "message" in resp:
+		print "TEST %s: PASS" % test
+	else:
+		print "TEST %s: FAIL" % test
