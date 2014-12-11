@@ -2,20 +2,23 @@ import socket as sock_conn
 import json
 import base64
 import os
+import sys
+sys.path.insert(0, '../server')
+
+from encrypt import *
+from transmit import *
 
 from client_objects import *
 from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5
 from Crypto.Cipher import AES
 
-from efs_helper.encrypt import *
-from efs_helper.transceive import *
 
 HOME_DIRECTORY = os.path.join(os.environ['HOME'], 'efs_local')
 SERVER_PK = None
 USER_PK = None
 USER_PRK = None
-EFS_Connection = None
+
 CURRENT_USER = ""
 CURRENT_DIRECTORY = None
 CURRENT_DIRECTORY_SK = None
@@ -23,44 +26,50 @@ CURRENT_PATH = ""
 
 BLOCK_SIZE = 32
 HOST = 'localhost'
-PORT = 1027
+PORT = 1025
 
-def register(socket, username):
-    key_msg = {'username': username, 'data': { 'action': 'key', 'username': 'server'}}
-    resp = json.loads(_transmitToServer(None, key_msg))
-    if (resp['status'] == 'success'):
-        SERVER_PK = RSA.importKey(resp['public_key'])
+def register(username):
+    global CURRENT_PATH
+    rsa_key = RSA.generate(2048)
+    public_key = rsa_key.publickey().exportKey('PEM')
+    key, cipher = _getAESCipher()
+    CURRENT_DIRECTORY = [_encryptAES(cipher, username)]
+    CURRENT_DIRECTORY_SK = [key]
+    CURRENT_PATH = os.path.join(CURRENT_PATH, username)
+    
+    key_msg = {'username': 'server', 'data': { 'action': 'key'}}
+    key_sig = sign_inner_dictionary(rsa_key, key_msg['data'])
+    key_msg['signature'] = key_sig
+    resp = _transmitToServer(json.dumps(key_msg))
+    resp = json.loads(resp)
+    print "response to key: ", resp
+    if resp['status'] == 'OK':
+        SERVER_PK = RSA.construct((resp['data']['public_key']['N'],
+                                   long(resp['data']['public_key']['e'])))
     else:
         status = {'status': 'error',
                   'message': 'failed to obtain server pk'}
         return status
     
-    rsa_key = RSA.generate(2048)
-    public_key = rsa_key.publickey().exportKey('PEM')
-    key, cipher = _getAESCipher()
-    CURRENT_DIRECTORY = [cipher.encrypt(username)]
-    CURRENT_DIRECTORY_SK = [key]
-    CURRENT_PATH = os.path.join(CURRENT_PATH, username)
-    
-    acl = {username: {'perm': '11', 'shared_key': encrypt(public_key, key)}}
+    acl = {username: {'perm': '11', 'shared_key': encrypt(rsa_key.publickey(), key)}}
     data = {
         'username': username,
         'action': 'register',
-        'public_key': public_key,
-        'user_dir': username,
-        'acl': acl
+        'public_key': {'N': rsa_key.n, 'e': rsa_key.e},
+        'acl': acl,
+        'signature_acl': sign_inner_dictionary(rsa_key, acl)
     }
 
-    signature = sign_dictionary(rsa_key.exportKey('PEM'), data)
+    signature = sign_inner_dictionary(rsa_key, data)
 
-    msg = base64.b64encode(json.dumps({
+    msg = json.dumps({
         'username': username,
         'signature': signature,
-        'data': data
-        }))
+        'data': data })
     
-    response = _transmitToServer(SERVER_PK, msg)
-    respdata = json.loads(decrypt(rsa_key.exportKey('PEM'), response))
+    response = _transmitToServer(msg) #should be encrypted in the future
+    print "response to register: ", response
+    respdata = json.loads(response) #json.loads(decrypt(rsa_key, response))
 
     status = {
         'status': respdata['status'],
@@ -87,10 +96,10 @@ def createFile(name, data=None):
     
     enc_dirs, key = _getEncryptedFilePath(name)
     acl = {username: '11'}
-    signature_acl = sign_dictionary(USER_PRK, acl)
+    signature_acl = sign_inner_dictionary(USER_PRK, acl)
     
     key, cipher = _getAESCipher(key)
-    contents = cipher.encrypt(readFileContents(name))    
+    contents = _encryptAES(cipher, readFileContents(name))    
     
     data = {'username': CURRENT_USER, 
             'action': 'create', 
@@ -99,14 +108,14 @@ def createFile(name, data=None):
             'acl': acl,
             'signature_acl': signature_acl
             }
-    signature = sign_dictionary(USER_PRK, data)
+    signature = sign_inner_dictionary(USER_PRK, data)
     
-    msg = base64.b64encode(json.dumps({'username': CURRENT_USER,
+    msg = json.dumps({'username': CURRENT_USER,
            'signature': signature,
-           'data': data}))
+           'data': data})
     
-    response = _transmitToServer(SERVER_PK, msg)
-    respdata = json.loads(decrypt(rsa_key.exportKey('PEM'), response))
+    response = _transmitToServer(msg)
+    respdata = json.loads(response) #json.loads(decrypt(rsa_key.exportKey('PEM'), response))
     
     status = {
         'status': respdata['status'],
@@ -118,12 +127,12 @@ def createDirectory(name):
     enc_dirs, key = _getEncryptedFilePath(name)
     key, cipher = _getAESCipher(key)
     enc_dirs = enc_dirs[:-1]
-    enc_dirs.append(cipher.encrypt(name))
+    enc_dirs.append(_encryptAES(cipher, name))
     
     key, cipher = _getAESCipher()
     
     acl = {username: {'perm': '11', 'shared_key': encrypt(USER_PK, key)}}
-    signature_acl = sign_dictionary(USER_PK, acl)
+    signature_acl = sign_inner_dictionary(USER_PK, acl)
     
     
     
@@ -133,13 +142,13 @@ def createDirectory(name):
             'acl': acl,
             'signature_acl': signature_acl}
     
-    signature = sign_dictionary(USER_PRK, data)
+    signature = sign_inner_dictionary(USER_PRK, data)
     
-    msg = base64.b64encode(json.dumps({'username': CURRENT_USER,
+    msg = json.dumps({'username': CURRENT_USER,
                                        'signature': signature,
-                                       'data': data}))
+                                       'data': data})
     
-    response = _transmitToServer(SERVER_PK, msg)
+    response = _transmitToServer(msg)
     respdata = json.loads(decrypt(rsa_key.exportKey('PEM'), response))
     
     status = {
@@ -156,7 +165,7 @@ def writeFile(name, data=None):
     key, cipher = _getAESCipher(key)
     
     acl = {username: '11'}
-    signature_acl = sign_dictionary(USER_PRK, acl)
+    signature_acl = sign_inner_dictionary(USER_PRK, acl)
     
     contents = readFileContents(name)
     if (contents == ""): 
@@ -164,20 +173,20 @@ def writeFile(name, data=None):
                   'message': 'cannot write empty file to server'}
         return status
     
-    contents = cipher.encrypt(contents) 
+    contents = _encryptAES(cipher, contents) 
     
     data = {'username': CURRENT_USER, 
             'action': 'write', 
             'filename': enc_dirs,
             'file': contents}
-    signature = sign_dictionary(USER_PRK, data)
+    signature = sign_inner_dictionary(USER_PRK, data)
     
-    msg = base64.b64encode(json.dumps({'username': CURRENT_USER,
+    msg = json.dumps({'username': CURRENT_USER,
            'signature': signature,
-           'data': data}))
+           'data': data})
     
-    response = _transmitToServer(SERVER_PK, msg)
-    respdata = json.loads(decrypt(rsa_key.exportKey('PEM'), response))
+    response = _transmitToServer(msg)
+    respdata = json.loads(response) #json.loads(decrypt(rsa_key.exportKey('PEM'), response))
     
     status = {
         'status': respdata['status'],
@@ -195,14 +204,14 @@ def readFile(name):
             'action': 'read', 
             'filename': enc_dirs}
     
-    signature = sign_dictionary(USER_PRK, data)
+    signature = sign_inner_dictionary(USER_PRK, data)
     
-    msg = base64.b64encode(json.dumps({'username': CURRENT_USER,
+    msg = json.dumps({'username': CURRENT_USER,
            'signature': signature,
-           'data': data}))
+           'data': data})
     
-    response = _transmitToServer(SERVER_PK, msg)
-    respdata = json.loads(decrypt(rsa_key.exportKey('PEM'), response))
+    response = _transmitToServer(msg)
+    respdata = json.loads(response) #json.loads(decrypt(rsa_key.exportKey('PEM'), response))
     status = {
         'status': respdata['status'],
         'message': respdata['message']
@@ -213,8 +222,8 @@ def readFile(name):
         filename = respdata['data']['filename']
         
         key, cipher = _getAESCipher(key)
-        contents = cipher.decrypt(contents)
-        filename = cipher.decrypt(filename)
+        contents = _decryptAES(cipher, contents)
+        filename = _decryptAES(cipher, filename)
         if (filename != name):
             status['status'] = 'error'
             status['message'] = "couldn't obtain correct file"
@@ -229,19 +238,19 @@ def listDir(name):
             'action': 'ls',
             'dirname': enc_dirs}
     
-    signature = sign_dictionary(USER_PRK, data)
+    signature = sign_inner_dictionary(USER_PRK, data)
     
-    msg = base64.b64encode(json.dumps({'username': CURRENT_USER,
+    msg = json.dumps({'username': CURRENT_USER,
            'signature': signature,
-           'data': data}))
+           'data': data})
     
-    response = _transmitToServer(SERVER_PK, msg)
-    respdata = json.loads(decrypt(rsa_key.exportKey('PEM'), response))
+    response = _transmitToServer(msg)
+    respdata = json.loads(response) #json.loads(decrypt(rsa_key.exportKey('PEM'), response))
 
     ls_contents = []
     key, cipher = _getAESCipher(key)
     for f in respdata['contents']:
-        ls_contents.append(cipher.decrypt(f))
+        ls_contents.append(_decryptAES(cipher, f))
         
     resp = {
         'status': respdata['status'],
@@ -257,20 +266,20 @@ def setPerm(obj, perm, users):
             'action': 'read-acl',
             'name': enc_dirs}
     
-    signature = sign_dictionary(USER_PRK, data)
+    signature = sign_inner_dictionary(USER_PRK, data)
     
-    msg = base64.b64encode(json.dumps({'username': CURRENT_USER,
+    msg = json.dumps({'username': CURRENT_USER,
            'signature': signature,
-           'data': data}))
+           'data': data})
     
-    response = _transmitToServer(SERVER_PK, msg)
-    respdata = json.loads(decrypt(rsa_key.exportKey('PEM'), response))
+    response = _transmitToServer(msg)
+    respdata = json.loads(response) #json.loads(decrypt(rsa_key.exportKey('PEM'), response))
     
     acl = respdata['data']['acl']
     if (type(acl[CURRENT_USER]) == type({})):
         for u in users:
             key_msg = {'username': CURRENT_USER, 'data': { 'action': 'key', 'username': u}}
-            resp = json.loads(_transmitToServer(None, key_msg))
+            resp = json.loads(_transmitToServer(key_msg))
             public_key = resp['data']['public_key']
             acl[u] = {'perm': perm, 'shared_key': encrypt(public_key, key)}
     else: 
@@ -299,8 +308,8 @@ def _changeToDir(dr):
         current_sk = CURRENT_DIRECTORY_SK[-1]
         key, cipher = _getAESCipher(currenk_sk)
         CURRENT_PATH = os.path.join(CURRENT_PATH, dr)
-        dr = cipher.encrypt(dr)
-        CURRENT_DIRECTORY.append(cipher.encrypt(dr))
+        dr = _encryptAES(cipher, dr)
+        CURRENT_DIRECTORY.append(_encryptAES(cipher, dr))
         CURRENT_DIRECTORY_SK.append(_getSharedKey(dr))
         
         
@@ -358,7 +367,7 @@ def _getSharedKey(dirname):
     data = {'action': 'shared_key',
             'dirname': dirname,
             'username': CURRENT_USER}
-    resp = json.loads(_transmitToServer(SERVER_PK, data))
+    resp = json.loads(_transmitToServer(data))
     return decrypt(_getUserPrivateKey(), resp['shared_key'])
     
 def _buildDirectoryNames(name):
@@ -370,10 +379,14 @@ def _buildDirectoryNames(name):
     dirs.insert(0, parent)
     return (dirs, os.path.basename(name))
 
-def _transmitToServer(key, text):
+def _transmitToServer(text):
     with EFSConnection(HOST, PORT) as c:
-        c.transmit(key, plaintext)
-        return c.recv(1024)
+        if (not SERVER_PK):
+            c.transmit_plaintext(text)
+        else:
+            c.transmit_encrypted(key, text)
+        resp = c.receive(8192)
+        return resp
 
 def _initLocalStorage(username, key):
     if not os.path.exists(HOME_DIRECTORY):

@@ -41,7 +41,7 @@ class EFSServer:
 		self.home_acls = {}
 
 	def handle_request(self, req):
-		# print "I am supposed to handle:", str(req)
+		print "I am supposed to handle:", str(req)
 
 		try:
 			handler = req["data"]["action"]
@@ -73,8 +73,6 @@ class EFSServer:
 				if username in self.users:
 					pub = self.users[username].public_key
 					okmsg = "Sending public key of user %s" % username
-				else:
-					resp = ErrorResponse("No user name %s exists" % username)
 
 				print okmsg
 				resp = OKResponse(okmsg)
@@ -132,7 +130,7 @@ class EFSServer:
 	def register(self, username, pub_key, table, acl_signature):
 		if username in self.users:
 			errmsg = "User %s already exists" % username
-			return ErrorResponse(errmsg)
+			return ErrorResponse(errmsg).getPayload({})
 
 		u = UserEntry(username, pub_key)
 		self.users[username] = u
@@ -275,6 +273,7 @@ class EFSHandler(SocketServer.BaseRequestHandler):
 					else:
 						length_digit = int(data)
 						packet_length = (packet_length * 10) + length_digit
+						print packet_length
 
 				# Receive packet with known length
 				data = "{"
@@ -304,14 +303,15 @@ class EFSHandler(SocketServer.BaseRequestHandler):
 
 	def handle(self):
 		data = self.receive()
-		plaintext = decrypt(efs_server.key, data)
+		
+		#plaintext = decrypt(efs_server.key, data)
 		# if use_threaded:
 		#	cur_thread = threading.current_thread()
 		#	response = "{} responds, {}".format(cur_thread.name, data)
 		# else:
 		#	response = "Server responds: {}".format(data)
-		efs_server.handle_request(plaintext)
-		# self.request.sendall(response)
+		response = json.dumps(efs_server.handle_request(json.loads("".join(data))))
+		self.request.sendall(response)
 
 if __name__ == "__main__":
 	efs_server = EFSServer()
