@@ -27,7 +27,7 @@ class ErrorResponse(ServerResponse):
 	def __init__(self, msg):
 		self.status = "NO"
 		self.message = msg
-		self.payload = {"status":self.status, "message":self.msg}
+		self.payload = {"status":self.status, "message":msg}
 
 class UserEntry:
 	username = None

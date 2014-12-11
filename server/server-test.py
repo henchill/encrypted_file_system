@@ -124,4 +124,35 @@ if __name__ == "__main__":
 		print "contents:", contents
 	else:
 		print "TEST %s: FAIL" % test
+
+	# TEST READ 3
+	test = "READ 3"
+	data = {"action": "read",
+	        "username": bob["username"],
+	        "filename": ["foo.txt"]}
+
+	req = {"username": bob["username"],
+	       "data": data,
+	       "signature": sign_inner_dictionary(bob["key"], data)}
+
+	resp = server.handle_request(req)
+	print "TEST %s: PASS" % test
 	
+	# TEST MKDIR
+	test = "MKDIR"
+	acl = {alice["username"]: "11"}
+	data = {"action": "mkdir",
+	        "username": alice["username"],
+	        "dirname": ["foobaz"],
+	        "acl": acl,
+	        "signature_acl": sign_inner_dictionary(alice["key"], acl)}
+
+	req = {"username": alice["username"],
+	       "data": data,
+	       "signature": sign_inner_dictionary(alice["key"], data)}
+
+	resp = server.handle_request(req)
+	if "message" in resp:
+		print "TEST %s: PASS" % test
+	else:
+		print "TEST %s: FAIL" % test

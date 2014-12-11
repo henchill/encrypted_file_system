@@ -93,6 +93,9 @@ class EFSServer:
 		
 	
 			elif handler == "read":
+				if username not in self.users:
+					print "No such user %s" % username
+					return ErrorResponse("No such user %s" % username)
 				user_pub = self.users[username].public_key
 				if verify_inner_dictionary(user_pub, signature, data):
 					print "Signature verfied. Trying to fetch file for read request..."
@@ -100,6 +103,9 @@ class EFSServer:
 					return resp
 		
 			elif handler == "write":
+				if username not in self.users:
+					print "No such user %s" % username
+					return ErrorResponse("No such user %s" % username)
 				user_pub = self.users[username].public_key
 				if verify_inner_dictionary(user_pub, signature, data):
 					print "Signature verfied. Trying to fetch file for write request..."
@@ -111,7 +117,11 @@ class EFSServer:
 
 			# DIRECTORY FUNCTIONS
 			elif handler == "mkdir":
-				if verify_inner_dictionary(self.users[username], signature, data):
+				if username not in self.users:
+					print "No such user %s" % username
+					return ErrorResponse("No such user %s" % username)
+				user_pub = self.users[username].public_key
+				if verify_inner_dictionary(user_pub, signature, data):
 					print "Signature verfied. Trying to create directory..."
 					resp = self.mkdir(username, data["dirname"], data["acl"], data["signature_acl"])
 					return resp
@@ -223,9 +233,9 @@ class EFSServer:
 			for home_e in self.files:
 				if home_e.name == username:
 					parent = home_e
-					acl = ACL(dirname, signature_acl, dir_acl)
-					de = DirEntry(dirname, username, {}, [])
-					parent.add_dir(dirname, de, acl)
+					acl = ACL(dirname[0], signature_acl, dir_acl)
+					de = DirEntry(dirname[0], username, {}, [])
+					parent.add_dir(dirname[0], de, acl)
 					mkdirmsg = "Created directory with dirname %s" % str(dirname)
 					print mkdirmsg
 					resp = OKResponse(mkdirmsg)
@@ -294,16 +304,16 @@ class EFSServer:
 			if parent_acl.is_writable(username):
 				current_entry = parent.get_entry(dirname)
 				if current_entry.is_deletable(username):
-						parent.delete_dir(dirname)
-						deletemsg = "Removed directory with dirname %s" % str(dirname)
-						print deletemsg
-						resp = OKResponse(deletemsg)
-						return resp.getPayload({})
+					parent.delete_dir(dirname)
+					deletemsg = "Removed directory with dirname %s" % str(dirname)
+					print deletemsg
+					resp = OKResponse(deletemsg)
+					return resp.getPayload({})
 				else:
-						errmsg = "Cannot delete directory. Insufficient permissions"
-						print errmsg
-						resp = ErrorResponse(errmsg)
-						return resp.getPayload({})
+					errmsg = "Cannot delete directory. Insufficient permissions"
+					print errmsg
+					resp = ErrorResponse(errmsg)
+					return resp.getPayload({})
 			else: 
 				errmsg1 = "Cannot delete directory. Insufficient permissions"
 				print errmsg1
