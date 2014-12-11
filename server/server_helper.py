@@ -27,7 +27,7 @@ class ErrorResponse(ServerResponse):
 	def __init__(self, msg):
 		self.status = "NO"
 		self.message = msg
-		self.payload = {"status":self.status, "message":self.msg}
+		self.payload = {"status":self.status, "message":msg}
 
 class UserEntry:
 	username = None
@@ -90,7 +90,7 @@ class DirEntry(Entry):
 		self.contents.remove(e)
 
 	def get_names(self):
-		var names = []
+		names = []
 		for e in self.contents:
 			names.append(e.name)
 		return names
