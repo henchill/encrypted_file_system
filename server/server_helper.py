@@ -70,9 +70,6 @@ class DirEntry(Entry):
 	def is_home(self, username):
 		return self.name == username
 
-	def add_file(self, file_entry):
-		self.contents.append(file_entry)
-
 	def get_acl(self):
 		return self.acl
 
@@ -81,6 +78,38 @@ class DirEntry(Entry):
 			if e.name == name:
 				return e
 
+	def add_dir(self, subdir_name, subdir_entry, subdir_acl):
+		self.acl[subdir_name] = subdir_acl
+		self.contents.append(subdir_entry)
+
+	def add_file(self, file_entry):
+		self.contents.append(file_entry)
+
+	def delete_file(self, filename):
+		e = self.get_entry(filename)
+		self.contents.remove(e)
+
+	def get_names(self):
+		var names = []
+		for e in self.contents:
+			names.append(e.name)
+		return names
+
+	def is_deletable(self, username):
+		for e in self.contents:
+			if e.name in self.acl: #is subdir
+				if (self.acl[e.name].is_writable(username) == False):
+					return False
+			else: #is file
+				if (e.get_acl().is_writable(username) == False):
+					return False
+		return True
+
+	def delete_dir(self, subdir_name):
+		de = self.get_entry(subdir_name)
+		del self.acl[subdir_name]
+		self.contents.remove(de)
+
 class FileEntry(Entry):
 	def __init__(self, name, owner, acl, file_contents):
 		self.name = name
@@ -88,10 +117,10 @@ class FileEntry(Entry):
 		self.owner = owner 
 		self.contents = file_contents
 
-	def is_readable(self, username, name):
+	def is_readable(self, username):
 		return self.acl.is_readable(username)
 	
-	def is_writable(self, username, name):
+	def is_writable(self, username):
 		return self.acl.is_writable(username)
 
 	def get_acl(self):
@@ -127,8 +156,8 @@ class ACL:
 
 	def is_readable(self, user):
 		if user in self.table:
-			return self.table[user][ACL_READ] == "1"
+			return self.table[user][self.ACL_READ] == "1"
 
 	def is_writable(self, user):
 		if user in self.table:
-			return self.table[user][ACL_WRITE] == "1"
+			return self.table[user][self.ACL_WRITE] == "1"

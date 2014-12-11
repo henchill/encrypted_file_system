@@ -87,16 +87,23 @@ class EFSServer:
 					return resp
 
 			elif handler == "delete":
-				print "Not implemented.."
+				user_pub = self.users[username].public_key
+				if verify_inner_dictionary(user_pub, signature, data):
+					print "Signature verfied. Trying to fetch file for read request..."
+					resp = self.delete_file(username, data["filename"])
+					return resp
+		
 	
 			elif handler == "read":
-				if verify_inner_dictionary(self.users[username], signature, data):
+				user_pub = self.users[username].public_key
+				if verify_inner_dictionary(user_pub, signature, data):
 					print "Signature verfied. Trying to fetch file for read request..."
 					resp = self.read(username, data["filename"])
 					return resp
 		
 			elif handler == "write":
-				if verify_inner_dictionary(self.users[username], signature, data):
+				user_pub = self.users[username].public_key
+				if verify_inner_dictionary(user_pub, signature, data):
 					print "Signature verfied. Trying to fetch file for write request..."
 					resp = self.write(username, data["filename"], data["file"])
 					return resp
@@ -112,14 +119,16 @@ class EFSServer:
 					return resp
 
 			elif handler == "remove":
-				print "Not implemented.."
+				if verify_inner_dictionary(self.users[username], signature, data):
+					print "Signature verfied. Trying to create directory..."
+					resp = self.delete_dir(username, data["dirname"])
+					return resp
 
 			elif handler == "ls":
-				print "Not implemented.."
-
-			elif handler == "cd":
-				print "Not implemented.."
-
+				if verify_inner_dictionary(self.users[username], signature, data):
+					print "Signature verfied. Trying to create directory..."
+					resp = self.list_contents(username, data["dirname"], data["acl"], data["signature_acl"])
+					return resp
 
 		except KeyError as ke:
 			print "Couldn't find expected action. Please use --help to see possible commands."
@@ -207,15 +216,126 @@ class EFSServer:
 			return resp.getPayload(data)
 
 
-	def mkdir(self, username, dirname, acl, signature_acl):
+	def mkdir(self, username, dirname, dir_acl, signature_acl):
 		if username not in self.users:
 			errmsg =  "User %s not registered" % username
 			return ErrorResponse(errmsg)
-		(perm, msg, parent) = self.traverse(username, filename[:-1])
-		if read_perm:
-			(perm, msg, parent) = self,traverse(username, parent)
-
 		data = {}
+		if (len(dirname) == 1):
+			for home_e in self.files:
+				if home_e.name = username:
+					parent = home_e
+					acl = ACL(dirname, signature_acl, dir_acl)
+					de = DirEntry(dirname, username, {}, [])
+					parent.add_dir(dirname, de, acl)
+					mkdirmsg = "Created directory with dirname %s" % str(dirname)
+					print mkdirmsg
+					resp = OKResponse(mkdirmsg)
+					return resp.getPayload(data)
+
+		(perm, msg, grandparent) = self.traverse(username, dirname[:-1])
+		if perm: 
+			parent_name = dirname[-2]
+			parent_acl = grandparent.get_acl()[parent_name]
+			if parent_acl.is_writable(username):
+				acl = ACL(dirname, signature_acl, dir_acl)
+				de = DirEntry(dirname, username, {}, [])
+				parent.add_dir(dirname, de, acl)
+				mkdirmsg = "Created directory with dirname %s" % str(dirname)
+				print mkdirmsg
+				resp = OKResponse(mkdirmsg)
+				return resp.getPayload(data)
+		else:
+			print msg
+			resp = ErrorResponse(msg)
+			return resp.getPayload(data)	
+
+	def delete_file(self, username, filename):
+		if username not in self.users:
+			errmsg =  "User %s not registered" % username
+			return ErrorResponse(errmsg)
+		(perm, msg, parent) = self.traverse(username, filename)
+		data = {}
+		if perm:	
+			parent.delete_file(filename)
+			deletemsg = "File deleted with filename %s" % str(filename)
+			print deletemsg
+			resp = OKResponse(deletemsg)
+			return resp.getPayload(data)
+		else:
+			print msg
+			resp = ErrorResponse(msg)
+			return resp.getPayload(data)
+
+	def delete_dir(self, username, dirname):
+		if username not in self.users:
+			errmsg =  "User %s not registered" % username
+			return ErrorResponse(errmsg)
+		data = {}
+		if (len(dirname) == 1):
+			for home_e in self.files:
+				if home_e.name = username:
+					parent = home_e
+					current_entry = parent.get_entry(dirname)
+					if current_entry.is_deletable(username):
+						parent.delete_dir(dirname)
+						deletemsg = "Removed directory with dirname %s" % str(dirname)
+						print deletemsg
+						resp = OKResponse(deletemsg)
+						return resp.getPayload({})
+					else:
+						errmsg = "Cannot delete directory. Insufficient permissions"
+						print errmsg
+						resp = ErrorResponse(errmsg)
+						return resp.getPayload({})
+
+		(perm, msg, grandparent) = self.traverse(username, dirname[:-1])
+		if perm: 
+			parent_name = dirname[-2]
+			parent_acl = grandparent.get_acl()[parent_name]
+			if parent_acl.is_writable(username):
+				current_entry = parent.get_entry(dirname)
+				if current_entry.is_deletable(username):
+						parent.delete_dir(dirname)
+						deletemsg = "Removed directory with dirname %s" % str(dirname)
+						print deletemsg
+						resp = OKResponse(deletemsg)
+						return resp.getPayload({})
+					else:
+						errmsg = "Cannot delete directory. Insufficient permissions"
+						print errmsg
+						resp = ErrorResponse(errmsg)
+						return resp.getPayload({})
+			else: 
+				errmsg1 = "Cannot delete directory. Insufficient permissions"
+				print errmsg1
+				resp = ErrorResponse(errmsg1)
+				return resp.getPayload({})
+		else:
+			print msg
+			resp = ErrorResponse(msg)
+			return resp.getPayload(data)	
+
+	def list_contents(self, username, dirname):
+		if username not in self.users:
+			errmsg =  "User %s not registered" % username
+			return ErrorResponse(errmsg)
+		(perm, msg, parent) = self.traverse(username, dirname)
+		data = {}
+		if perm:
+			de = parent.get_entry(dirname)
+			if de.is_readable(username):
+				data["contents"] = de.get_names()
+				lsmsg = "Sending list of contents in directory with name %s" % str(dirname)
+				print lsmsg
+				resp = OKResponse(readmsg)
+				return resp.getPayload(data)
+		else:
+			print msg
+			resp = ErrorResponse(msg)
+			return resp.getPayload(data)
+
+
 
 	def traverse(self, username, filename):
 		fn = filename
