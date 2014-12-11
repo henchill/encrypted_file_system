@@ -221,7 +221,7 @@ class EFSServer:
 		data = {}
 		if (len(dirname) == 1):
 			for home_e in self.files:
-				if home_e.name = username:
+				if home_e.name == username:
 					parent = home_e
 					acl = ACL(dirname, signature_acl, dir_acl)
 					de = DirEntry(dirname, username, {}, [])
@@ -272,7 +272,7 @@ class EFSServer:
 		data = {}
 		if (len(dirname) == 1):
 			for home_e in self.files:
-				if home_e.name = username:
+				if home_e.name == username:
 					parent = home_e
 					current_entry = parent.get_entry(dirname)
 					if current_entry.is_deletable(username):
@@ -299,7 +299,7 @@ class EFSServer:
 						print deletemsg
 						resp = OKResponse(deletemsg)
 						return resp.getPayload({})
-					else:
+				else:
 						errmsg = "Cannot delete directory. Insufficient permissions"
 						print errmsg
 						resp = ErrorResponse(errmsg)

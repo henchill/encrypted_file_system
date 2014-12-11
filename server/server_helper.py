@@ -90,7 +90,7 @@ class DirEntry(Entry):
 		self.contents.remove(e)
 
 	def get_names(self):
-		var names = []
+		names = []
 		for e in self.contents:
 			names.append(e.name)
 		return names
