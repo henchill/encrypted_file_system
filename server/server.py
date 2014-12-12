@@ -88,11 +88,11 @@ class EFSServer:
 					resp = self.get_filekey(username, data["dirname"])
 					return resp
 
-			elif handler == "read_acl":
+			# elif handler == "read_acl":
 
 
 
-			elif handler == "write_acl":
+			# elif handler == "write_acl":
 
 
 			# FILE FUNCTIONS
@@ -281,19 +281,28 @@ class EFSServer:
 		if username not in self.users:
 			errmsg =  "User %s not registered" % username
 			return ErrorResponse(errmsg)
-		(perm, msg, parent) = self.traverse(username, dirname)
+		
 		data = {}
-		if perm: 
-			de = parent.get_entry(dirname)
-			data["filekey"] = de.get_filekey(username)
+		if (len(dirname) == 1 or (dirname[0] == username) and len(dirname) == 2): #traverse doesn't get correct parent??
+			data["filekey"] = self.home_acls[username].get_filekey(username)
 			filkeymsg = "Sending filekey for user %s and dirname %s" % str(dirname)
+			print filekeymsg
+			resp = OKResponse(filekeymsg)
+			return resp.getPayload(data)
+
+		else:
+			(perm, msg, parent) = self.traverse(username, dirname)
+			if perm: 
+				de = parent.get_entry(dirname)
+				data["filekey"] = de.get_filekey(username)
+				filkeymsg = "Sending filekey for user %s and dirname %s" % str(dirname)
 				print filekeymsg
 				resp = OKResponse(filekeymsg)
 				return resp.getPayload(data)
-		else:
-			print msg
-			resp = ErrorResponse(msg)
-			return resp.getPayload(data)
+			else:
+				print msg
+				resp = ErrorResponse(msg)
+				return resp.getPayload(data)
 
 	def delete_file(self, username, filename):
 		if username not in self.users:
