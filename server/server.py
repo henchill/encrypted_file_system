@@ -405,7 +405,7 @@ class EFSServer:
 				home_acl = self.home_acls[current_name]
 				if (home_acl.is_readable(username) == False):
 					errmsg =  "Permission denied %s" % current_name
-					return (False, errmsg)
+					return (False, errmsg, "")
 				else:
 					for e in self.files:
 						if e.name == username:
@@ -415,11 +415,11 @@ class EFSServer:
 				current_acls = current_dir.get_acl()
 				if current_name not in current_acls:
 					errmsg = "File doesn't exist, %s" % current_name
-					return (False, errmsg)
+					return (False, errmsg, "")
 				current_acl = current_acl[current_name]
 				if (current_acl.is_readable(username) == False):
 					errmsg =  "Permission denied %s" % current_name
-					return (False, errmsg)
+					return (False, errmsg, "")
 				else:
 					current_dir = current_dir.get_entry(current_name)
 					continue
