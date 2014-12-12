@@ -285,7 +285,7 @@ class EFSServer:
 		data = {}
 		if (len(dirname) == 1 or (dirname[0] == username) and len(dirname) == 2): #traverse doesn't get correct parent??
 			data["filekey"] = self.home_acls[username].get_filekey(username)
-			filkeymsg = "Sending filekey for user %s and dirname %s" % str(dirname)
+			filekeymsg = "Sending filekey for user %s and dirname %s" % (username, str(dirname))
 			print filekeymsg
 			resp = OKResponse(filekeymsg)
 			return resp.getPayload(data)

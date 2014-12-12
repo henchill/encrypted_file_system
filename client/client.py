@@ -94,7 +94,7 @@ def signIn(username):
     _getUserPublicKey(username) #USER_PK
     _getUserPrivateKey(username) #USER_PRK
 
-    shared_key = _getSharedKey(username)
+    shared_key = _getSharedKey([username])
     CURRENT_DIRECTORY = [username]
     CURRENT_DIRECTORY_SK = [shared_key]
     CURRENT_PATH = os.path.join(CURRENT_PATH, username)
@@ -106,12 +106,12 @@ def createFile(name, data=None):
     """
     
     enc_dirs, key = _getEncryptedFilePath(name)
-    acl = {'username': ['1', '1']}
+    acl = {CURRENT_USER: ['1', '1']}
     signature_acl = sign_inner_dictionary(USER_PRK, acl)
     
     key, cipher = _getAESCipher(key)
     contents = _encryptAES(cipher, readFileContents(name))    
-    
+
     data = {'username': CURRENT_USER, 
             'action': 'create', 
             'filename': enc_dirs,
@@ -136,17 +136,14 @@ def createFile(name, data=None):
 
 def createDirectory(name):
     enc_dirs, key = _getEncryptedFilePath(name)
-    key, cipher = _getAESCipher(key)
-    enc_dirs = enc_dirs[:-1]
-    enc_dirs.append(_encryptAES(cipher, name))
+    new_key, cipher = _getAESCipher()
     
-    key, cipher = _getAESCipher()
-    
-    acl = {username: {'perm': '11', 'shared_key': encrypt(USER_PK, key)}}
-    signature_acl = sign_inner_dictionary(USER_PK, acl)
+    acl = {CURRENT_USER: {'perm': ['1', '1'],
+                      'shared_key': encrypt(USER_PK, new_key)}}
+    signature_acl = sign_inner_dictionary(USER_PRK, acl)
     
     data = {'username': CURRENT_USER,
-            'action': mkdir,
+            'action': 'mkdir',
             'dirname': enc_dirs,
             'acl': acl,
             'signature_acl': signature_acl}
@@ -154,11 +151,11 @@ def createDirectory(name):
     signature = sign_inner_dictionary(USER_PRK, data)
     
     msg = json.dumps({'username': CURRENT_USER,
-                                       'signature': signature,
-                                       'data': data})
+                      'signature': signature,
+                      'data': data})
     
     response = _transmitToServer(msg)
-    respdata = json.loads(decrypt(rsa_key.exportKey('PEM'), response))
+    respdata = json.loads(response) #json.loads(decrypt(rsa_key.exportKey('PEM'), response))
     
     status = {
         'status': respdata['status'],
@@ -361,13 +358,13 @@ def _writeFileToLocal(filename, contents):
 def _getEncryptedFilePath(name):
     dir_list = _buildDirectoryNames(name)
     shared_keys = []
-    enc_dirs = []
+    encr_dirs = []
     current_sk = None
     if (dir_list[0] == '/'):
         current_enc_dir = dir_list[1]
-        current_sk = _getSharedKey(current_enc_dir)
+        current_sk = _getSharedKey([current_enc_dir])
         dir_list = dir_list[2:]
-        enc_dirs.append(current_enc_dir)
+        encr_dirs.append(current_enc_dir)
     else:
         current_sk = CURRENT_DIRECTORY_SK[-1]
         dir_list = dir_list[1:]
@@ -376,14 +373,10 @@ def _getEncryptedFilePath(name):
     for dirname in dir_list:
         key, cipher = _getAESCipher(current_sk)
         enc_dir = _encryptAES(cipher, dirname)
-        enc_dirs.append(enc_dir)
+        encr_dirs.append(enc_dir)
         if (dirname != dir_list[-1]):
-            current_sk = _getSharedKey(enc_dirs)
-        
-    key, cipher = _getAESCipher(current_sk)
-    enc_dir = _encryptAES(cipher, dirname)
-    enc_dirs.append(enc_dir)
-    return (enc_dirs, current_sk)
+            current_sk = _getSharedKey(encr_dirs)
+    return (encr_dirs, current_sk)
 
 def _getSharedKey(dirname):
     data = {'action': 'filekey',
