@@ -8,7 +8,7 @@ import SocketServer
 from encrypt import *
 from Crypto.PublicKey import RSA
 from server_helper import *
-from pychecker import *
+# from pychecker import *
 
 from encrypt import *
 from Crypto.PublicKey import RSA
@@ -161,9 +161,10 @@ class EFSServer:
 					return resp
 
 			elif handler == "ls":
+				print "In LS"
 				if verify_inner_dictionary(self.users[username], signature, data):
-					print "Signature verfied. Trying to create directory..."
-					resp = self.list_contents(username, data["dirname"], data["acl"], data["signature_acl"])
+					print "Signature verfied. Trying to do ls..."
+					resp = self.list_contents(username, data["dirname"])
 					return resp
 
 		except KeyError as ke:

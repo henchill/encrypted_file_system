@@ -287,17 +287,38 @@ def setPerm(obj, perm, users):
     
     response = _transmitToServer(msg)
     respdata = json.loads(response) #json.loads(decrypt(rsa_key.exportKey('PEM'), response))
-    print "data: ", response
+    print "data: ", respdata
     acl = respdata['data']['acl']
-    if (type(acl[CURRENT_USER]) == type({})):
-        for u in users:
-            key_msg = {'username': CURRENT_USER, 'data': { 'action': 'key', 'username': u}}
-            resp = json.loads(_transmitToServer(key_msg))
-            public_key = resp['data']['public_key']
-            acl[u] = {'perm': perm, 'shared_key': encrypt(public_key, key)}
-    else: 
-        for u in users:
-            acl[u] = {'perm': perm}
+    for u in users:
+        entry = {'perm': [], 'shared_key': None}
+        if perm == 'r': 
+            entry['perm'] = ['1', '0']
+        elif perm == 'rw':
+            entry['perm'] = ['1', '1']
+        elif perm == 'w':
+            entry['perm'] = ['1', '1']
+
+        key_msg = {'username': CURRENT_USER, 
+                   'data': {'action': 'key',
+                            'username': u }}
+        key_sig = sign_inner_dictionary(USER_PRK, key_msg['data'])
+        key_msg['signature'] = key_sig
+        resp = json.loads(_transmitToServer(json.dumps(key_msg)))
+        public_key = RSA.construct((resp['data']['public_key']['N'],
+                                   long(resp['data']['public_key']['e'])))
+        entry['shared_key'] = encrypt(public_key, key)
+        acl[u] = entry
+
+    acl_data = {'username': CURRENT_USER,
+                'action': 'write_acl',
+                'pathname': enc_dirs,
+                'acl': acl,
+                'signature_acl': sign_inner_dictionary(USER_PRK, acl)}
+    write_msg = json.dumps({'username': CURRENT_USER, 
+                            'signature': sign_inner_dictionary(USER_PRK, acl_data),
+                            'data': acl_data})
+    write_resp = json.loads(_transmitToServer(write_msg))
+    return write_resp
 
 def changeDirectory(name):
     dir_list = _buildDirectoryNames(name)
@@ -326,7 +347,6 @@ def _changeToDir(dr):
         dr = _encryptAES(cipher, dr)
         CURRENT_DIRECTORY.append(dr)
         CURRENT_DIRECTORY_SK.append(_getSharedKey(CURRENT_DIRECTORY))
-        
         
 def readFileContents(name):
     dirs = _buildDirectoryNames(name)
