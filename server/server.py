@@ -8,7 +8,6 @@ import SocketServer
 from encrypt import *
 from Crypto.PublicKey import RSA
 from server_helper import *
-from pychecker import *
 
 from encrypt import *
 from Crypto.PublicKey import RSA
@@ -155,15 +154,17 @@ class EFSServer:
 					return resp
 
 			elif handler == "remove":
-				if verify_inner_dictionary(self.users[username], signature, data):
+				user_pub = self.users[username].public_key
+				if verify_inner_dictionary(user_pub, signature, data):
 					print "Signature verfied. Trying to create directory..."
 					resp = self.delete_dir(username, data["dirname"])
 					return resp
 
 			elif handler == "ls":
-				if verify_inner_dictionary(self.users[username], signature, data):
-					print "Signature verfied. Trying to create directory..."
-					resp = self.list_contents(username, data["dirname"], data["acl"], data["signature_acl"])
+				user_pub = self.users[username].public_key
+				if verify_inner_dictionary(user_pub, signature, data):
+					print "Signature verfied. Trying to list directory..."
+					resp = self.list_contents(username, data["dirname"])
 					return resp
 
 		except KeyError as ke:
@@ -198,7 +199,7 @@ class EFSServer:
 		data = {}
 		if (len(dirname) == 1) and (dirname[0]==username): #case when dirname is just username, old or ((dirname[0] == username) and (len(dirname) == 2)
 			data["filekey"] = self.home_acls[username].get_filekey(username)
-			filkeymsg = "Sending filekey for user %s and dirname %s" % str(username, dirname)
+			filekeymsg = "Sending filekey for user %s and dirname %s" % str(username, dirname)
 			print filekeymsg
 			resp = OKResponse(filekeymsg)
 			return resp.getPayload(data)
