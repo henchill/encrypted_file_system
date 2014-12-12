@@ -38,7 +38,7 @@ def register(username):
     CURRENT_DIRECTORY = [username]
     CURRENT_DIRECTORY_SK = [key]
     CURRENT_PATH = os.path.join(CURRENT_PATH, username)
-    
+    print "current_path_register: ", CURRENT_PATH
     key_msg = {'username': username, 'data': { 'action': 'key', 
                                                 'username': 'server'}}
     key_sig = sign_inner_dictionary(USER_PRK, key_msg['data'])
@@ -95,9 +95,13 @@ def signIn(username):
     _getUserPrivateKey(username) #USER_PRK
 
     shared_key = _getSharedKey([username])
-    CURRENT_DIRECTORY = [username]
-    CURRENT_DIRECTORY_SK = [shared_key]
-    CURRENT_PATH = os.path.join(CURRENT_PATH, username)
+    if (CURRENT_DIRECTORY == None or CURRENT_DIRECTORY_SK == None):
+        CURRENT_DIRECTORY = [username]
+        CURRENT_DIRECTORY_SK = [shared_key]
+    if (CURRENT_PATH == ""):
+        CURRENT_PATH = os.path.join(CURRENT_PATH, username)
+    else: 
+        CURRENT_PATH = os.path.join("", username)
     
 def createFile(name, data=None):
     """
@@ -106,11 +110,13 @@ def createFile(name, data=None):
     """
     
     enc_dirs, key = _getEncryptedFilePath(name)
-    acl = {CURRENT_USER: ['1', '1']}
+    print "key: ", key
+    acl = {CURRENT_USER: {'perm': ['1', '1'],
+                          'shared_key': encrypt(USER_PK, key)}}
     signature_acl = sign_inner_dictionary(USER_PRK, acl)
     
     key, cipher = _getAESCipher(key)
-    contents = _encryptAES(cipher, readFileContents(name))    
+    contents = _encryptAES(cipher, "" """readFileContents(name)""")    
 
     data = {'username': CURRENT_USER, 
             'action': 'create', 
@@ -161,6 +167,7 @@ def createDirectory(name):
         'status': respdata['status'],
         'message': respdata['message']
     }
+    # TODO: create the file locally
     return status
 
 def delete(name):
@@ -170,8 +177,8 @@ def writeFile(name, data=None):
     enc_dirs, key = _getEncryptedFilePath(name)
     key, cipher = _getAESCipher(key)
     
-    acl = {username: '11'}
-    signature_acl = sign_inner_dictionary(USER_PRK, acl)
+    # acl = {CURRENT_USER: ['1', '1']}
+    # signature_acl = sign_inner_dictionary(USER_PRK, acl)
     
     contents = readFileContents(name)
     if (contents == ""): 
@@ -223,9 +230,9 @@ def readFile(name):
         'message': respdata['message']
     }
     
-    if (status['status'] != 'error'):
+    if (status['status'] == 'OK'):
         contents = respdata['data']['file']
-        filename = respdata['data']['filename']
+        filename = respdata['data']['filename'][-1]
         
         key, cipher = _getAESCipher(key)
         contents = _decryptAES(cipher, contents)
@@ -323,10 +330,13 @@ def _changeToDir(dr):
         
 def readFileContents(name):
     dirs = _buildDirectoryNames(name)
+    print "dirs: ", dirs
     if dirs[0] == "":
         name = os.path.join(CURRENT_PATH, name)
+    print "name: ", name
+    print "currpath: ", CURRENT_PATH
     filename = os.path.join(HOME_DIRECTORY, name)
-
+    print "filename: ", filename
     file_contents = ""
     if (os.path.isfile(filename)):
         f = open(filename, 'r')
@@ -351,7 +361,7 @@ def _writeFileToLocal(filename, contents):
     if (dirs[0] == ''):
         filename = os.path.join(CURRENT_PATH, filename)
 
-    f = open(os.path.join(HOME_DIRECTORY, filename), 'rw')
+    f = open(os.path.join(HOME_DIRECTORY, filename), 'w')
     f.write(contents)
     f.close
     

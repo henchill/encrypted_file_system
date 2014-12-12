@@ -195,9 +195,9 @@ class EFSServer:
 			return ErrorResponse(errmsg)
 		
 		data = {}
-		if (len(dirname) == 1 or ((dirname[0] == username) and len(dirname) == 2): #case when dirname is just username
+		if (len(dirname) == 1) or ((dirname[0] == username) and len(dirname) == 2): #case when dirname is just username
 			data["filekey"] = self.home_acls[username].get_filekey(username)
-			filkeymsg = "Sending filekey for user %s and dirname %s" % str(username, dirname)
+			filekeymsg = "Sending filekey for user %s and dirname %s" % (username, str(dirname))
 			print filekeymsg
 			resp = OKResponse(filekeymsg)
 			return resp.getPayload(data)
@@ -207,7 +207,7 @@ class EFSServer:
 			if perm: 
 				de = parent.get_entry(dirname)
 				data["filekey"] = de.get_filekey(username)
-				filekeymsg = "Sending filekey for user %s and dirname %s" % str(username, dirname)
+				filekeymsg = "Sending filekey for user %s and dirname %s" % (username, str(dirname))
 				print filekeymsg
 				resp = OKResponse(filekeymsg)
 				return resp.getPayload(data)
@@ -223,7 +223,7 @@ class EFSServer:
 
 		data = {}
 
-		if (len(pathname) == 1 or ((pathname[0] == username) and len(pathname) == 2): #case when pathname is just username
+		if (len(pathname) == 1) or ((pathname[0] == username) and len(pathname) == 2): #case when pathname is just username
 			send_acl = self.home_acls[username].get_acl_table()
 			if username in send_acl:
 				data["acl"] = send_acl
@@ -265,7 +265,7 @@ class EFSServer:
 
 		data = {}
 
-		if (len(pathname) == 1 or ((pathname[0] == username) and len(pathname) == 2): #case when pathname is just username
+		if (len(pathname) == 1) or ((pathname[0] == username) and len(pathname) == 2): #case when pathname is just username
 			send_acl = self.home_acls[username].get_acl_table()
 			if username in send_acl:
 				data["acl"] = send_acl
@@ -291,7 +291,7 @@ class EFSServer:
 					resp = OKResponse(writeaclmsg)
 					return resp.getPayload(data)
 				else:
-				data["acl"] = de.get_acl(username).get_acl_table()
+					data["acl"] = de.get_acl(username).get_acl_table()
 				
 			else:
 				print msg
