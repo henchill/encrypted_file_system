@@ -27,7 +27,7 @@ class ErrorResponse(ServerResponse):
 	def __init__(self, msg):
 		self.status = "NO"
 		self.message = msg
-		self.payload = {"status":self.status, "message":self.message}
+		self.payload = {"status":self.status, "message":msg}
 
 class UserEntry:
 	username = None
@@ -65,7 +65,8 @@ class DirEntry(Entry):
 		self.name = name
 		self.acl = acl #acl dictionaryfor all subdirectories {subdirname: <acl>, subdirname:<acl>}
 		self.owner = owner
-		self.contents = contents #[subdir DE and file FE]
+		self.filekeys = {}
+		self.contents = contents #[subdir DE and file FE]	
 
 	def is_home(self, username):
 		return self.name == username
@@ -78,12 +79,19 @@ class DirEntry(Entry):
 			if e.name == name:
 				return e
 
+	def get_filekey(self, username):
+		return self.filekeys[username]
+
 	def add_dir(self, subdir_name, subdir_entry, subdir_acl):
 		self.acl[subdir_name] = subdir_acl
 		self.contents.append(subdir_entry)
+		if subdir_entry.owner not in self.filekeys:
+			self.filekeys[subdir_entry.owner] = subdir_acl.get_filekey(subdir_entry.owner)
 
 	def add_file(self, file_entry):
 		self.contents.append(file_entry)
+		if file_entry.owner not in self.filekeys:
+			self.filekeys[file_entry.owner] = file_entry.get_acl().get_filekey(file_entry.owner)
 
 	def delete_file(self, filename):
 		e = self.get_entry(filename)
@@ -136,9 +144,11 @@ class FileEntry(Entry):
 
 class ACL:
 	filename = None
-	table = None
+	table = None #{username: {'perm':[R, W], 'shared_key': 'xxxx'}}
 	signature = None
 
+	PERM = 'perm'
+	SKEY = 'shared_key'
 	ACL_READ = 0
 	ACL_WRITE = 1
 
@@ -156,8 +166,12 @@ class ACL:
 
 	def is_readable(self, user):
 		if user in self.table:
-			return self.table[user][self.ACL_READ] == "1"
+			return self.table[user][self.PERM][self.ACL_READ] == "1"
 
 	def is_writable(self, user):
 		if user in self.table:
-			return self.table[user][self.ACL_WRITE] == "1"
+			return self.table[user][self.PERM][self.ACL_WRITE] == "1"
+
+	def get_filekey(self, user):
+		if user in self.table:
+			return self.table[user][self.SKEY]
