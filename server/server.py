@@ -77,13 +77,19 @@ class EFSServer:
 				resp = OKResponse(okmsg)
 				return resp.getPayload({"public_key":{"N":pub.n, "e": pub.e}})
 
-
 			elif handler == "filekey":
 				user_pub = self.users[username].public_key
 				if verify_inner_dictionary(user_pub, signature, data):
 					print "Signature verfied. Prociding shared key for directory..."
 					resp = self.get_filekey(username, data["dirname"])
 					return resp
+
+			elif handler == "read_acl":
+
+
+
+			elif handler == "write_acl":
+
 
 			# FILE FUNCTIONS
 			elif handler == "create":

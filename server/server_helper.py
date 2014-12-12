@@ -140,8 +140,6 @@ class FileEntry(Entry):
 	def set_contents(self, new_contents):
 		self.contents = new_contents
 
-
-
 class ACL:
 	filename = None
 	table = None #{username: {'perm':[R, W], 'shared_key': 'xxxx'}}
