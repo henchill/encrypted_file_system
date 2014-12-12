@@ -276,8 +276,8 @@ def setPerm(obj, perm, users):
     enc_dirs, key = _getEncryptedFilePath(obj)
     
     data = {'username': CURRENT_USER,
-            'action': 'read-acl',
-            'name': enc_dirs}
+            'action': 'read_acl',
+            'pathname': enc_dirs}
     
     signature = sign_inner_dictionary(USER_PRK, data)
     
@@ -287,7 +287,7 @@ def setPerm(obj, perm, users):
     
     response = _transmitToServer(msg)
     respdata = json.loads(response) #json.loads(decrypt(rsa_key.exportKey('PEM'), response))
-    
+    print "data: ", response
     acl = respdata['data']['acl']
     if (type(acl[CURRENT_USER]) == type({})):
         for u in users:
