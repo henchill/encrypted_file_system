@@ -66,8 +66,9 @@ class EFSServer:
 			elif handler == "key":
 				pub = self.key.publickey()
 				okmsg = "Sending Server Key"
-				if username in self.users:
-					pub = self.users[username].public_key
+				request_username = data["username"]
+				if request_username in self.users:
+					pub = self.users[request_username].public_key
 					okmsg = "Sending public key of user %s" % username
 				else:
 					resp = ErrorResponse("No user name %s exists" % username)
@@ -75,6 +76,14 @@ class EFSServer:
 				print okmsg
 				resp = OKResponse(okmsg)
 				return resp.getPayload({"public_key":{"N":pub.n, "e": pub.e}})
+
+
+			elif handler == "filekey":
+				user_pub = self.users[username].public_key
+				if verify_inner_dictionary(user_pub, signature, data):
+					print "Signature verfied. Prociding shared key for directory..."
+					resp = self.get_filekey(username, data["dirname"])
+					return resp
 
 			# FILE FUNCTIONS
 			elif handler == "create":
@@ -256,7 +265,25 @@ class EFSServer:
 		else:
 			print msg
 			resp = ErrorResponse(msg)
-			return resp.getPayload(data)	
+			return resp.getPayload(data)
+
+	def get_filekey(self, username, dirname):
+		if username not in self.users:
+			errmsg =  "User %s not registered" % username
+			return ErrorResponse(errmsg)
+		(perm, msg, parent) = self.traverse(username, dirname)
+		data = {}
+		if perm: 
+			de = parent.get_entry(dirname)
+			data["filekey"] = de.get_filekey(username)
+			filkeymsg = "Sending filekey for user %s and dirname %s" % str(dirname)
+				print filekeymsg
+				resp = OKResponse(filekeymsg)
+				return resp.getPayload(data)
+		else:
+			print msg
+			resp = ErrorResponse(msg)
+			return resp.getPayload(data)
 
 	def delete_file(self, username, filename):
 		if username not in self.users:
@@ -342,8 +369,6 @@ class EFSServer:
 			print msg
 			resp = ErrorResponse(msg)
 			return resp.getPayload(data)
-
-
 
 	def traverse(self, username, filename):
 		fn = filename
