@@ -58,7 +58,9 @@ class EFSServer:
 				rsa_pub = RSA.construct((N, e))
 				acl = data["acl"]
 				acl_signature = data["signature_acl"]
-
+				print '\n\n\n'
+				print json.dumps(data)
+				print '\n\n\n'
 				if verify_inner_dictionary(rsa_pub, signature, data):
 					print "Signature verfied. Registering user..."
 					resp = self.register(username, rsa_pub, acl, acl_signature)
@@ -223,7 +225,7 @@ class EFSServer:
 		data = {}
 		if (len(dirname) == 1):
 			for home_e in self.files:
-				if home_e.name = username:
+				if home_e.name == username:
 					parent = home_e
 					acl = ACL(dirname, signature_acl, dir_acl)
 					de = DirEntry(dirname, username, {}, [])
@@ -274,7 +276,7 @@ class EFSServer:
 		data = {}
 		if (len(dirname) == 1):
 			for home_e in self.files:
-				if home_e.name = username:
+				if home_e.name == username:
 					parent = home_e
 					current_entry = parent.get_entry(dirname)
 					if current_entry.is_deletable(username):
@@ -296,16 +298,16 @@ class EFSServer:
 			if parent_acl.is_writable(username):
 				current_entry = parent.get_entry(dirname)
 				if current_entry.is_deletable(username):
-						parent.delete_dir(dirname)
-						deletemsg = "Removed directory with dirname %s" % str(dirname)
-						print deletemsg
-						resp = OKResponse(deletemsg)
-						return resp.getPayload({})
-					else:
-						errmsg = "Cannot delete directory. Insufficient permissions"
-						print errmsg
-						resp = ErrorResponse(errmsg)
-						return resp.getPayload({})
+					parent.delete_dir(dirname)
+					deletemsg = "Removed directory with dirname %s" % str(dirname)
+					print deletemsg
+					resp = OKResponse(deletemsg)
+					return resp.getPayload({})
+				else:
+					errmsg = "Cannot delete directory. Insufficient permissions"
+					print errmsg
+					resp = ErrorResponse(errmsg)
+					return resp.getPayload({})
 			else: 
 				errmsg1 = "Cannot delete directory. Insufficient permissions"
 				print errmsg1
@@ -430,7 +432,9 @@ class EFSHandler(SocketServer.BaseRequestHandler):
 		#	response = "{} responds, {}".format(cur_thread.name, data)
 		# else:
 		#	response = "Server responds: {}".format(data)
-		response = json.dumps(efs_server.handle_request(json.loads("".join(data))))
+
+		tmp = json.loads("".join(data))
+		response = json.dumps(efs_server.handle_request(tmp))
 		self.request.sendall(response)
 
 if __name__ == "__main__":

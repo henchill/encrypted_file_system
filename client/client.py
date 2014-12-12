@@ -29,20 +29,22 @@ HOST = 'localhost'
 PORT = 1025
 
 def register(username):
-    global CURRENT_PATH
-    rsa_key = RSA.generate(2048)
-    public_key = rsa_key.publickey().exportKey('PEM')
+    global CURRENT_PATH, CURRENT_DIRECTORY, CURRENT_DIRECTORY_SK
+    global SERVER_PK, USER_PK, USER_PRK, CURRENT_USER
+    
+    USER_PRK = RSA.generate(2048)
+    USER_PK = USER_PRK.publickey()
     key, cipher = _getAESCipher()
-    CURRENT_DIRECTORY = [_encryptAES(cipher, username)]
+    CURRENT_DIRECTORY = [username]
     CURRENT_DIRECTORY_SK = [key]
     CURRENT_PATH = os.path.join(CURRENT_PATH, username)
     
-    key_msg = {'username': 'server', 'data': { 'action': 'key'}}
-    key_sig = sign_inner_dictionary(rsa_key, key_msg['data'])
+    key_msg = {'username': username, 'data': { 'action': 'key', 
+                                                'username': 'server'}}
+    key_sig = sign_inner_dictionary(USER_PRK, key_msg['data'])
     key_msg['signature'] = key_sig
     resp = _transmitToServer(json.dumps(key_msg))
     resp = json.loads(resp)
-    print "response to key: ", resp
     if resp['status'] == 'OK':
         SERVER_PK = RSA.construct((resp['data']['public_key']['N'],
                                    long(resp['data']['public_key']['e'])))
@@ -51,16 +53,16 @@ def register(username):
                   'message': 'failed to obtain server pk'}
         return status
     
-    acl = {username: {'perm': '11', 'shared_key': encrypt(rsa_key.publickey(), key)}}
+    acl = {username: {'perm': ['1', '1'], 'shared_key': encrypt(USER_PK, key)}}
     data = {
         'username': username,
         'action': 'register',
-        'public_key': {'N': rsa_key.n, 'e': rsa_key.e},
+        'public_key': {'N': USER_PK.n, 'e': USER_PK.e},
         'acl': acl,
-        'signature_acl': sign_inner_dictionary(rsa_key, acl)
+        'signature_acl': sign_inner_dictionary(USER_PRK, acl)
     }
 
-    signature = sign_inner_dictionary(rsa_key, data)
+    signature = sign_inner_dictionary(USER_PRK, data)
 
     msg = json.dumps({
         'username': username,
@@ -76,17 +78,26 @@ def register(username):
         'message': respdata['message']
     }
 
-    if (respdata['status'] == 'success'): 
-        _initLocalStorage(username, rsa_key)
+    if (respdata['status'] == 'OK'): 
+        CURRENT_USER = username
+        _initLocalStorage()
         
     return status
 
 def signIn(username):
+    global CURRENT_PATH, CURRENT_USER, CURRENT_DIRECTORY, CURRENT_DIRECTORY_SK
+ 
     # init socket EFS_Connection
-    CURRENT_USER = username
-    _getServerPublicKey()
-    USER_PK = _getUserPublicKey(username)
-    USER_PRK = _getUserPrivateKey(username)
+    print "get info for username: %s" % username
+    CURRENT_USER = username 
+    _getServerPublicKey() #SERVER_PK
+    _getUserPublicKey(username) #USER_PK
+    _getUserPrivateKey(username) #USER_PRK
+
+    shared_key = _getSharedKey(username)
+    CURRENT_DIRECTORY = [username]
+    CURRENT_DIRECTORY_SK = [shared_key]
+    CURRENT_PATH = os.path.join(CURRENT_PATH, username)
     
 def createFile(name, data=None):
     """
@@ -133,8 +144,6 @@ def createDirectory(name):
     
     acl = {username: {'perm': '11', 'shared_key': encrypt(USER_PK, key)}}
     signature_acl = sign_inner_dictionary(USER_PK, acl)
-    
-    
     
     data = {'username': CURRENT_USER,
             'action': mkdir,
@@ -228,7 +237,7 @@ def readFile(name):
             status['status'] = 'error'
             status['message'] = "couldn't obtain correct file"
             return status
-        _writeFileToLocal(filename, contents)
+        _writeFileToLocal(name, contents)
         return status
     return status
 
@@ -287,8 +296,8 @@ def setPerm(obj, perm, users):
             acl[u] = {'perm': perm}
 
 def changeDirectory(name):
-    dir_list, basename = _buildDirectoryNames(name)
-    dir_list.append(basename)
+    dir_list = _buildDirectoryNames(name)
+    
     if dir_list[0] == '':
         for dr in dir_list[1:]:
             _changeToDir(dr)
@@ -309,12 +318,16 @@ def _changeToDir(dr):
         key, cipher = _getAESCipher(currenk_sk)
         CURRENT_PATH = os.path.join(CURRENT_PATH, dr)
         dr = _encryptAES(cipher, dr)
-        CURRENT_DIRECTORY.append(_encryptAES(cipher, dr))
+        CURRENT_DIRECTORY.append(dr)
         CURRENT_DIRECTORY_SK.append(_getSharedKey(dr))
         
         
 def readFileContents(name):
+    dirs = _buildDirectoryNames(name)
+    if dirs[0] == "":
+        name = os.path.join(CURRENT_PATH, name)
     filename = os.path.join(HOME_DIRECTORY, name)
+
     file_contents = ""
     if (os.path.isfile(filename)):
         f = open(filename, 'r')
@@ -323,7 +336,10 @@ def readFileContents(name):
     return contents
 
 def readAclContents(name):
-    filename = "." + os.path.join(HOME_DIRECTORY, name) + ".acl"
+    dirs = _buildDirectoryNames(name)
+    if dirs[0] == "":
+        name = os.path.join(CURRENT_PATH, name)
+    filename = os.path.join(HOME_DIRECTORY, name)
     contents = ""
     if (os.path.isfile(filename)):
         f = open(filename, 'r')
@@ -332,12 +348,16 @@ def readAclContents(name):
     return contents
 
 def _writeFileToLocal(filename, contents):
-    f = open(filename, 'rw')
+    dirs = _buildDirectoryNames(filename)
+    if (dirs[0] == ''):
+        filename = os.path.join(CURRENT_PATH, filename)
+
+    f = open(os.path.join(HOME_DIRECTORY, filename), 'rw')
     f.write(contents)
     f.close
     
 def _getEncryptedFilePath(name):
-    dir_list, basename = _buildDirectoryNames(name)
+    dir_list = _buildDirectoryNames(name)
     shared_keys = []
     enc_dirs = []
     current_sk = None
@@ -349,14 +369,13 @@ def _getEncryptedFilePath(name):
     else:
         current_sk = CURRENT_DIRECTORY_SK[-1]
         dir_list = dir_list[1:]
-        tmp = list(CURRENT_DIRECTORY).extend(enc_dirs)
-        encr_dirs = tmp        
+        encr_dirs = list(CURRENT_DIRECTORY)        
     
     for dirname in dir_list:
         key, cipher = _getAESCipher(currenk_sk)
         enc_dir = _encryptAES(cipher, dirname)
         enc_dirs.append(enc_dir)
-        current_sk = _getSharedKey(enc_dir)
+        current_sk = _getSharedKey(enc_dirs)
         
     key, cipher = _getAESCipher(currenk_sk)
     enc_dir = _encryptAES(cipher, dirname)
@@ -365,65 +384,85 @@ def _getEncryptedFilePath(name):
 
 def _getSharedKey(dirname):
     data = {'action': 'shared_key',
-            'dirname': dirname,
-            'username': CURRENT_USER}
-    resp = json.loads(_transmitToServer(data))
-    return decrypt(_getUserPrivateKey(), resp['shared_key'])
+            'dirname': dirname}
+
+    signature = sign_inner_dictionary(USER_PRK, data)
+
+    msg = json.dumps({
+        'username': CURRENT_USER,
+        'signature': signature,
+        'data': data })
+    resp = json.loads(_transmitToServer(msg))
+    # return decrypt(USER_PRK, resp['shared_key'])
+    return resp['shared_key']
     
 def _buildDirectoryNames(name):
+    print 'begin build'
     dirs = []
-    parent = os.path.dirname(name)
-    while parent != "" or parent != "/":
-        dirs.insert(0, parent)
+    parent = name
+    while parent != "" and parent != "/":
+        print parent
+        dirs.insert(0, os.path.basename(parent))
         parent = os.path.dirname(parent)
     dirs.insert(0, parent)
-    return (dirs, os.path.basename(name))
+    return dirs
 
 def _transmitToServer(text):
     with EFSConnection(HOST, PORT) as c:
-        if (not SERVER_PK):
-            c.transmit_plaintext(text)
-        else:
-            c.transmit_encrypted(key, text)
+        # if (not SERVER_PK):
+        #     c.transmit_plaintext(text)
+        # else:
+        #     c.transmit_encrypted(SERVER_PK, text)
+        c.transmit_plaintext(text)
         resp = c.receive(8192)
         return resp
 
-def _initLocalStorage(username, key):
-    if not os.path.exists(HOME_DIRECTORY):
-        os.makedirs(HOME_DIRECTORY)
-    filename = os.path.join(HOME_DIRECTORY, user['username'] + "_%s_key.pem")
+def _initLocalStorage():
+    userdir = os.path.join(HOME_DIRECTORY, CURRENT_USER)
+    if not os.path.exists(userdir):
+        os.makedirs(userdir)
+    filename = os.path.join(userdir, CURRENT_USER + "_%s_key.pem")
     f = open(filename % 'public', 'w')
-    f.write(key.publickey().exportKey('PEM'))
+    f.write(USER_PK.exportKey('PEM'))
     f.close()
     
     f = open(filename % 'private', 'w')
-    f.write(key.exportKey('PEM'))
+    f.write(USER_PRK.exportKey('PEM'))
     f.close()
     
-    server_pub = os.path.join(HOME_DIRECTORY, 'server_pk.pem')
+    server_pub = os.path.join(userdir, 'server_pk.pem')
     f = open(server_pub, 'w')
-    f.write(server_pub.exportKey('PEM'))
+    f.write(SERVER_PK.exportKey('PEM'))
     f.close()
     
 def _getServerPublicKey():
-    server_pub = os.path.join(HOME_DIRECTORY, 'server_pk.pem')
+    global SERVER_PK
+    print "home: ", HOME_DIRECTORY, " current user: ", CURRENT_USER
+    userdir = os.path.join(HOME_DIRECTORY, CURRENT_USER)
+    print "userdir: ", userdir
+    server_pub = os.path.join(userdir, 'server_pk.pem')
+    print server_pub
     f = open(server_pub, 'r')
     SERVER_PK = RSA.importKey(f.read())
     f.close()
 
 def _getUserPublicKey(username):
-    filename = os.path.join(HOME_DIRECTORY, username + '_public_key.pem')
+    global USER_PK
+    userdir = os.path.join(HOME_DIRECTORY, username)
+    filename = os.path.join(userdir, username + '_public_key.pem')
     f = open(filename, 'r')
     key = RSA.importKey(f.read())
     f.close()
-    return key
+    USER_PK = key
 
 def _getUserPrivateKey(username):
-    filename = os.path.join(HOME_DIRECTORY, username + '_private_key.pem')
+    global USER_PRK
+    userdir = os.path.join(HOME_DIRECTORY, username)
+    filename = os.path.join(userdir, username + '_private_key.pem')
     f = open(filename, 'r')
     key = RSA.importKey(f.read())
     f.close()
-    return key
+    USER_PRK = key
 
 def _padString(s):
     return s + ((BLOCK_SIZE - len(s) % BLOCK_SIZE) * chr(BLOCK_SIZE - len(s) % BLOCK_SIZE))

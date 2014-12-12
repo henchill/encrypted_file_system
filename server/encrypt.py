@@ -141,7 +141,7 @@ def decrypt_aes(key, b64_iv, b64_ciphertext):
 def verify_inner_dictionary(key, signature, d):
 	"""Verifies the contents of the dictionary based on its signature."""
 
-	dict_str = json.dumps(d)
+	dict_str = json.dumps(d, sort_keys=True)
 	h = SHA.new()
 	h.update(dict_str)
 
@@ -154,7 +154,7 @@ def sign_inner_dictionary(key, d):
 	"""Signs the contents of the dictionary as encoded in JSON.
 	"""
 
-	dict_str = json.dumps(d)
+	dict_str = json.dumps(d, sort_keys=True)
 	h = SHA.new()
 	h.update(dict_str)
 	signer = PKCS1_PSS.new(key)

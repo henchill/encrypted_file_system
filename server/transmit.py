@@ -44,15 +44,12 @@ class EFSConnection:
             packet_string = str(length) + packet_json
 
             self.connection.send(packet_string)
-            print packet_string
+            # print packet_string
             packet_seq += 1
 
     def transmit_encrypted(self, key, text):
         """Send a string encrypted on key through a socket."""
-        if (key != None):
-            ciphertexts = encrypt(key, text)
-        else:
-            ciphertexts = [text]
+        ciphertexts = encrypt(key, text)
         self.transmit_ciphertexts(ciphertexts)
 
     def transmit_plaintext(self, plaintext):

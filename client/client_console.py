@@ -13,10 +13,7 @@ from Crypto.Hash import SHA
 from Crypto import Random
 
 # Server things
-HOST = 'localhost'
-PORT = 1027
 
-server_public = None
 current_directory = ''
 base_directory = None
 
@@ -25,11 +22,6 @@ current_user = None
 
 # Encryption details
 chunk_size = 200
-
-# Socket
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.connect((HOST, PORT))
-s.settimeout(1)
 
 home = os.path.join(os.environ['HOME'], 'encrypted_file_system')
 
@@ -57,7 +49,7 @@ def dispatch(cmd, args):
             print "Please specify a username"
         else:
             
-            resp = client.register(s, args[0])
+            resp = client.register(args[0])
             if resp['status'] == 'error': 
                 print "Failed to register user. %s" % resp['message']
             else:
@@ -158,5 +150,3 @@ except EOFError as e:
     print "\nBye"
 except Exception as e:
     raise
-finally:
-    s.close()

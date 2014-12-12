@@ -47,6 +47,7 @@ if __name__ == "__main__":
 	req["data"] = data
 	req["signature"] = sign_inner_dictionary(alice["key"], data)
 	resp = server.handle_request(req)
+	print resp
 	if "message" in resp:
 		print "TEST %s: PASS" % test
 	else:
@@ -72,7 +73,7 @@ if __name__ == "__main__":
 		print "TEST %s: PASS" % test
 	else:
 		print "TEST %s: FAIL" % test
-
+	"""
 	# TEST READ 1
 	test = "READ 1"
 	data = {"action": "read",
@@ -125,3 +126,4 @@ if __name__ == "__main__":
 	else:
 		print "TEST %s: FAIL" % test
 	
+"""
