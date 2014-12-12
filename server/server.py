@@ -81,13 +81,19 @@ class EFSServer:
 				resp = OKResponse(okmsg)
 				return resp.getPayload({"public_key":{"N":pub.n, "e": pub.e}})
 
-
 			elif handler == "filekey":
 				user_pub = self.users[username].public_key
 				if verify_inner_dictionary(user_pub, signature, data):
 					print "Signature verfied. Prociding shared key for directory..."
 					resp = self.get_filekey(username, data["dirname"])
 					return resp
+
+			# elif handler == "read_acl":
+
+
+
+			# elif handler == "write_acl":
+
 
 			# FILE FUNCTIONS
 			elif handler == "create":
@@ -275,19 +281,27 @@ class EFSServer:
 		if username not in self.users:
 			errmsg =  "User %s not registered" % username
 			return ErrorResponse(errmsg)
-		(perm, msg, parent) = self.traverse(username, dirname)
+		
 		data = {}
-		if perm: 
-			de = parent.get_entry(dirname)
-			data["filekey"] = de.get_filekey(username)
+		if (len(dirname) == 1 or (dirname[0] == username) and len(dirname) == 2): #traverse doesn't get correct parent??
+			data["filekey"] = self.home_acls[username].get_filekey(username)
 			filkeymsg = "Sending filekey for user %s and dirname %s" % str(dirname)
 			print filekeymsg
 			resp = OKResponse(filekeymsg)
 			return resp.getPayload(data)
 		else:
-			print msg
-			resp = ErrorResponse(msg)
-			return resp.getPayload(data)
+			(perm, msg, parent) = self.traverse(username, dirname)
+			if perm: 
+				de = parent.get_entry(dirname)
+				data["filekey"] = de.get_filekey(username)
+				filkeymsg = "Sending filekey for user %s and dirname %s" % str(dirname)
+				print filekeymsg
+				resp = OKResponse(filekeymsg)
+				return resp.getPayload(data)
+			else:
+				print msg
+				resp = ErrorResponse(msg)
+				return resp.getPayload(data)
 
 	def delete_file(self, username, filename):
 		if username not in self.users:
@@ -390,7 +404,7 @@ class EFSServer:
 				home_acl = self.home_acls[current_name]
 				if (home_acl.is_readable(username) == False):
 					errmsg =  "Permission denied %s" % current_name
-					return (False, errmsg)
+					return (False, errmsg, "")
 				else:
 					for e in self.files:
 						if e.name == username:
@@ -400,11 +414,11 @@ class EFSServer:
 				current_acls = current_dir.get_acl()
 				if current_name not in current_acls:
 					errmsg = "File doesn't exist, %s" % current_name
-					return (False, errmsg)
+					return (False, errmsg, "")
 				current_acl = current_acl[current_name]
 				if (current_acl.is_readable(username) == False):
 					errmsg =  "Permission denied %s" % current_name
-					return (False, errmsg)
+					return (False, errmsg, "")
 				else:
 					current_dir = current_dir.get_entry(current_name)
 					continue
