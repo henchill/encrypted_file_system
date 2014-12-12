@@ -8,6 +8,7 @@ import SocketServer
 from encrypt import *
 from Crypto.PublicKey import RSA
 from server_helper import *
+from pychecker import *
 
 from encrypt import *
 from Crypto.PublicKey import RSA
@@ -277,7 +278,7 @@ class EFSServer:
 
 		new_acl = ACL(pathname, signature_acl, acl)
 		if ((len(pathname) == 1) and is_username(pathname[0])): #writing acl for home, check that username is owner
-			if (pathname[0] == username): #only allow accessing own home acl
+			if (pathname[0] == username): #only allow updating own home acl
 				self.home_acls[username] = new_acl
 				writeaclmsg = "Received acl table for pathname %s. Making update to acl" % str(pathname)
 				print writeaclmsg
