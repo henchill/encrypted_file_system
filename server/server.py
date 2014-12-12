@@ -281,9 +281,9 @@ class EFSServer:
 			de = parent.get_entry(dirname)
 			data["filekey"] = de.get_filekey(username)
 			filkeymsg = "Sending filekey for user %s and dirname %s" % str(dirname)
-				print filekeymsg
-				resp = OKResponse(filekeymsg)
-				return resp.getPayload(data)
+			print filekeymsg
+			resp = OKResponse(filekeymsg)
+			return resp.getPayload(data)
 		else:
 			print msg
 			resp = ErrorResponse(msg)

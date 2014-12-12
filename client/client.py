@@ -106,7 +106,7 @@ def createFile(name, data=None):
     """
     
     enc_dirs, key = _getEncryptedFilePath(name)
-    acl = {username: '11'}
+    acl = {'username': ['1', '1']}
     signature_acl = sign_inner_dictionary(USER_PRK, acl)
     
     key, cipher = _getAESCipher(key)
@@ -333,9 +333,9 @@ def readFileContents(name):
     file_contents = ""
     if (os.path.isfile(filename)):
         f = open(filename, 'r')
-        contents = f.read()
+        file_contents = f.read()
         f.close()
-    return contents
+    return file_contents
 
 def readAclContents(name):
     dirs = _buildDirectoryNames(name)
@@ -374,18 +374,19 @@ def _getEncryptedFilePath(name):
         encr_dirs = list(CURRENT_DIRECTORY)        
     
     for dirname in dir_list:
-        key, cipher = _getAESCipher(currenk_sk)
+        key, cipher = _getAESCipher(current_sk)
         enc_dir = _encryptAES(cipher, dirname)
         enc_dirs.append(enc_dir)
-        current_sk = _getSharedKey(enc_dirs)
+        if (dirname != dir_list[-1]):
+            current_sk = _getSharedKey(enc_dirs)
         
-    key, cipher = _getAESCipher(currenk_sk)
+    key, cipher = _getAESCipher(current_sk)
     enc_dir = _encryptAES(cipher, dirname)
     enc_dirs.append(enc_dir)
     return (enc_dirs, current_sk)
 
 def _getSharedKey(dirname):
-    data = {'action': 'shared_key',
+    data = {'action': 'filekey',
             'dirname': dirname}
 
     signature = sign_inner_dictionary(USER_PRK, data)
@@ -396,7 +397,7 @@ def _getSharedKey(dirname):
         'data': data })
     resp = json.loads(_transmitToServer(msg))
     # return decrypt(USER_PRK, resp['shared_key'])
-    return resp['shared_key']
+    return resp['data']['filekey']
     
 def _buildDirectoryNames(name):
     print 'begin build'
