@@ -8,6 +8,7 @@ import SocketServer
 from encrypt import *
 from Crypto.PublicKey import RSA
 from server_helper import *
+from pychecker import *
 
 from encrypt import *
 from Crypto.PublicKey import RSA
@@ -195,7 +196,7 @@ class EFSServer:
 			return ErrorResponse(errmsg)
 		
 		data = {}
-		if (len(dirname) == 1) and (dirname[0]==username)): #case when dirname is just username, old or ((dirname[0] == username) and (len(dirname) == 2)
+		if (len(dirname) == 1) and (dirname[0]==username): #case when dirname is just username, old or ((dirname[0] == username) and (len(dirname) == 2)
 			data["filekey"] = self.home_acls[username].get_filekey(username)
 			filkeymsg = "Sending filekey for user %s and dirname %s" % str(username, dirname)
 			print filekeymsg
@@ -274,7 +275,7 @@ class EFSServer:
 		data = {}
 		new_acl = ACL(pathname, signature_acl, acl)
 		if ((len(pathname) == 1) and is_username(pathname[0])): #writing acl for home, check that username is owner
-			if (pathname[0] == username): #only allow accessing own home acl
+			if (pathname[0] == username): #only allow updating own home acl
 				self.home_acls[username] = new_acl
 				writeaclmsg = "Received acl table for pathname %s. Making update to acl" % str(pathname)
 				print writeaclmsg
