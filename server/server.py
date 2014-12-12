@@ -84,15 +84,23 @@ class EFSServer:
 			elif handler == "filekey":
 				user_pub = self.users[username].public_key
 				if verify_inner_dictionary(user_pub, signature, data):
-					print "Signature verfied. Prociding shared key for directory..."
+					print "Signature verfied. Providing shared key for directory..."
 					resp = self.get_filekey(username, data["dirname"])
 					return resp
 
-			# elif handler == "read_acl":
+			elif handler == "read_acl":
+				user_pub = self.users[username].public_key
+				if verify_inner_dictionary(user_pub, signature, data):
+					print "Signature verfied. Providing read_acl request..."
+					resp = self.read_acl(username, data["pathname"])
+					return resp
 
-
-
-			# elif handler == "write_acl":
+			elif handler == "write_acl":
+				user_pub = self.users[username].public_key
+				if verify_inner_dictionary(user_pub, signature, data):
+					print "Signature verfied. Trying to acquire acl for write_acl request..."
+					resp = self.write_acl(username, data["pathname"],  data["acl"], data["signature_acl"])
+					return resp
 
 
 			# FILE FUNCTIONS
@@ -180,6 +188,65 @@ class EFSServer:
 		data = {}
 		resp = OKResponse(okmsg)
 		return resp.getPayload(data)
+
+	def get_filekey(self, username, dirname):
+		if username not in self.users:
+			errmsg =  "User %s not registered" % username
+			return ErrorResponse(errmsg)
+		
+		data = {}
+		if (len(dirname) == 1 or ((dirname[0] == username) and len(dirname) == 2): #traverse doesn't get correct parent??
+			data["filekey"] = self.home_acls[username].get_filekey(username)
+			filkeymsg = "Sending filekey for user %s and dirname %s" % str(dirname)
+			print filekeymsg
+			resp = OKResponse(filekeymsg)
+			return resp.getPayload(data)
+
+		else:
+			(perm, msg, parent) = self.traverse(username, dirname)
+			if perm: 
+				de = parent.get_entry(dirname)
+				data["filekey"] = de.get_filekey(username)
+				filkeymsg = "Sending filekey for user %s and dirname %s" % str(dirname)
+				print filekeymsg
+				resp = OKResponse(filekeymsg)
+				return resp.getPayload(data)
+			else:
+				print msg
+				resp = ErrorResponse(msg)
+				return resp.getPayload(data)
+
+	def read_acl(self, pathname):
+		if username not in self.users:
+			errmsg =  "User %s not registered" % username
+			return ErrorResponse(errmsg)
+		data = {}
+		if (len(pathname) == 1 or (pathname[0] == username) and len(pathname) == 2): #traverse doesn't get correct parent??
+			data["filekey"] = self.home_acls[username].get_filekey(username)
+			filkeymsg = "Sending filekey for user %s and dirname %s" % str(dirname)
+			print filekeymsg
+			resp = OKResponse(filekeymsg)
+			return resp.getPayload(data)
+
+		else:
+			(perm, msg, parent) = self.traverse(username, dirname)
+			if perm: 
+				de = parent.get_entry(dirname)
+				data["filekey"] = de.get_filekey(username)
+				filkeymsg = "Sending filekey for user %s and dirname %s" % str(dirname)
+				print filekeymsg
+				resp = OKResponse(filekeymsg)
+				return resp.getPayload(data)
+			else:
+				print msg
+				resp = ErrorResponse(msg)
+				return resp.getPayload(data)
+
+
+
+
+	def write_acl(self, pathname, acl, signature_acl):
+
 
 	def create(self, username, filename, file_content, file_acl, signature_acl):
 		if username not in self.users:
@@ -276,33 +343,6 @@ class EFSServer:
 			print msg
 			resp = ErrorResponse(msg)
 			return resp.getPayload(data)
-
-	def get_filekey(self, username, dirname):
-		if username not in self.users:
-			errmsg =  "User %s not registered" % username
-			return ErrorResponse(errmsg)
-		
-		data = {}
-		if (len(dirname) == 1 or (dirname[0] == username) and len(dirname) == 2): #traverse doesn't get correct parent??
-			data["filekey"] = self.home_acls[username].get_filekey(username)
-			filkeymsg = "Sending filekey for user %s and dirname %s" % str(dirname)
-			print filekeymsg
-			resp = OKResponse(filekeymsg)
-			return resp.getPayload(data)
-
-		else:
-			(perm, msg, parent) = self.traverse(username, dirname)
-			if perm: 
-				de = parent.get_entry(dirname)
-				data["filekey"] = de.get_filekey(username)
-				filkeymsg = "Sending filekey for user %s and dirname %s" % str(dirname)
-				print filekeymsg
-				resp = OKResponse(filekeymsg)
-				return resp.getPayload(data)
-			else:
-				print msg
-				resp = ErrorResponse(msg)
-				return resp.getPayload(data)
 
 	def delete_file(self, username, filename):
 		if username not in self.users:
@@ -412,7 +452,7 @@ class EFSServer:
 							current_dir = e
 					continue
 			else:
-				current_acls = current_dir.get_acl()
+				current_acls = current_dir.get_acl() #will only reach here after it has traversed the above if once
 				if current_name not in current_acls:
 					errmsg = "File doesn't exist, %s" % current_name
 					return (False, errmsg, "")
