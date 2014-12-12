@@ -35,6 +35,7 @@ def register(username):
     USER_PRK = RSA.generate(2048)
     USER_PK = USER_PRK.publickey()
     key, cipher = _getAESCipher()
+    print "register shared key", key
     CURRENT_DIRECTORY = [username]
     CURRENT_DIRECTORY_SK = [key]
     CURRENT_PATH = os.path.join(CURRENT_PATH, username)
@@ -46,7 +47,7 @@ def register(username):
     resp = _transmitToServer(json.dumps(key_msg))
     resp = json.loads(resp)
     if resp['status'] == 'OK':
-        SERVER_PK = RSA.construct((resp['data']['public_key']['N'],
+        SERVER_PK = RSA.construct((long(resp['data']['public_key']['N']),
                                    long(resp['data']['public_key']['e'])))
     else:
         status = {'status': 'error',
@@ -95,6 +96,7 @@ def signIn(username):
     _getUserPrivateKey(username) #USER_PRK
 
     shared_key = _getSharedKey([username])
+    print "shared key signin: ", shared_key
     if (CURRENT_DIRECTORY == None or CURRENT_DIRECTORY_SK == None):
         CURRENT_DIRECTORY = [username]
         CURRENT_DIRECTORY_SK = [shared_key]
@@ -108,9 +110,12 @@ def createFile(name, data=None):
     C: { username, signature, data:{username, action:create, filename, file, acl}}
     S: { status, message, data:{ {} } }
     """
-    
+    print "create file started"
     enc_dirs, key = _getEncryptedFilePath(name)
-    print "key: ", key
+    # print "key: ", key
+    # print "enc_dirs: ", enc_dirs
+    print "key to encrypt: ", key, "\n userpk: ", USER_PK
+    print encrypt
     acl = {CURRENT_USER: {'perm': ['1', '1'],
                           'shared_key': encrypt(USER_PK, key)}}
     signature_acl = sign_inner_dictionary(USER_PRK, acl)
@@ -142,6 +147,7 @@ def createFile(name, data=None):
 
 def createDirectory(name):
     enc_dirs, key = _getEncryptedFilePath(name)
+    print "dir create: ", enc_dirs, ' key: ', key
     new_key, cipher = _getAESCipher()
     
     acl = {CURRENT_USER: {'perm': ['1', '1'],
@@ -397,6 +403,7 @@ def _getEncryptedFilePath(name):
         encr_dirs.append(current_enc_dir)
     else:
         current_sk = CURRENT_DIRECTORY_SK[-1]
+        print "current shared key: ", current_sk
         dir_list = dir_list[1:]
         encr_dirs = list(CURRENT_DIRECTORY)        
     
@@ -420,7 +427,8 @@ def _getSharedKey(dirname):
         'data': data })
     resp = json.loads(_transmitToServer(msg))
     # return decrypt(USER_PRK, resp['shared_key'])
-    return resp['data']['filekey']
+    print "get shared key: ", resp['data']['filekey']
+    return resp['data']['filekey'][0]
     
 def _buildDirectoryNames(name):
     print 'begin build'
@@ -498,8 +506,11 @@ def _unPad(s):
 
 def _getAESCipher(key=None):
     if (key == None): 
-        key = os.urandom(32)
-    cipher = AES.new(key)
+        key = base64.b64encode(os.urandom(32))
+    else:
+        key = decrypt(USER_PRK, [key])
+    cipher = AES.new(base64.b64decode(key))
+    print "AES cipher key is", key
     return (key, cipher)
 
 def _encryptAES(cipher, plaintext):

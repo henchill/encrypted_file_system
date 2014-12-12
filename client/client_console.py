@@ -132,7 +132,7 @@ def dispatch(cmd, args):
 try:
     while True:
         try:
-            user_input = raw_input("tefs/%s> " % current_directory)
+            user_input = raw_input("tefs/> ")
             cmd = user_input.split(' ')[0]
             args = user_input.split(' ')[1:]
             if cmd == "quit":
@@ -140,9 +140,6 @@ try:
                 break
             else:
                 dispatch(cmd, args)
-        except socket.timeout as st:
-            print "(socket) timeout"
-            continue
         except (ValueError, KeyboardInterrupt) as e:
             print e
             continue

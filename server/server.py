@@ -50,6 +50,8 @@ class EFSServer:
 			signature = req["signature"]
 
 			# INITAL FUNCTIONS
+
+
 			if handler == "register":
 				# rebuild user public key
 				pub = req["data"]["public_key"]
@@ -198,18 +200,23 @@ class EFSServer:
 		
 		data = {}
 
-		if (len(dirname) == 1) and (dirname[0]==username): #case when dirname is just username, old or ((dirname[0] == username) and (len(dirname) == 2)
+		if ((len(dirname) == 1) and (dirname[0]==username)) or (len(dirname)==2 and dirname[0]==username): #case when dirname is just username, old or ((dirname[0] == username) and (len(dirname) == 2)
 			data["filekey"] = self.home_acls[username].get_filekey(username)
 			filekeymsg = "Sending filekey for user %s and dirname %s" % (username, str(dirname))
 
 			print filekeymsg
 			resp = OKResponse(filekeymsg)
+			# print "home acls: ", self.home_acls[username]
+			print "return: ", data
 			return resp.getPayload(data)
 
 		else:
 			(perm, msg, parent) = self.traverse(username, dirname)
 			if perm: 
-				de = parent.get_entry(dirname)
+				de = parent.get_entry(dirname[-1])
+				print "dirname: ", dirname
+				print "parent: ", parent.name
+				print "de: ", de
 				data["filekey"] = de.get_filekey(username)
 				filekeymsg = "Sending filekey for user %s and dirname %s" % (username, str(dirname))
 				print filekeymsg
@@ -249,7 +256,7 @@ class EFSServer:
 		else:
 			(perm, msg, parent) = self.traverse(username, pathname)
 			if perm: 
-				entry = parent.get_entry(pathname)
+				entry = parent.get_entry(pathname[-1])
 				if isinstance(pathname[-1], DirEntry):  #check parent for acl
 					send_acl = parent.get_acl()[pathname[-1]].get_acl_table()
 				else: 
@@ -278,7 +285,7 @@ class EFSServer:
 
 		data = {}
 
-		new_acl = ACL(pathname, signature_acl, acl)
+		new_acl = ACL(pathname, acl, signature_acl)
 		if ((len(pathname) == 1) and is_username(pathname[0])): #writing acl for home, check that username is owner
 			if (pathname[0] == username): #only allow updating own home acl
 				self.home_acls[username] = new_acl
@@ -294,7 +301,7 @@ class EFSServer:
 		else:
 			(perm, msg, parent) = self.traverse(username, pathname)
 			if perm: 
-				entry = parent.get_entry(pathname)
+				entry = parent.get_entry(pathname[-1])
 				if entry.is_owner(username):
 					if isinstance(pathname[-1], DirEntry):  #check parent for acl
 						parent.set_acl(pathname[-1], new_acl)
@@ -322,7 +329,7 @@ class EFSServer:
 		data = {}
 		if perm:	
 			#Made it here => can create file in parent
-			acl = ACL(filename, signature_acl, file_acl)
+			acl = ACL(filename, file_acl, signature_acl)
 			fe = FileEntry(filename, username, acl, file_content)
 			parent.add_file(fe)
 			createmsg = "File created with filename %s" % str(filename)
@@ -342,7 +349,7 @@ class EFSServer:
 		data = {}
 		if perm:	
 			#Made it here => can read file in parent
-			fe = parent.get_entry(filename)
+			fe = parent.get_entry(filename[-1])
 			if fe.is_readable(username):
 				data["filename"] = filename
 				data["file"] = fe.get_contents()
@@ -363,7 +370,7 @@ class EFSServer:
 		data = {}
 		if perm:	
 			#Made it here => can write file in parent
-			fe = parent.get_entry(filename)
+			fe = parent.get_entry(filename[-1])
 			if fe.is_writable(username):
 				fe.set_contents(file_contents)
 				writemsg = "Writing to file complete for filename %s" % str(filename)
@@ -385,7 +392,7 @@ class EFSServer:
 			for home_e in self.files:
 				if home_e.name == username:
 					parent = home_e
-					acl = ACL(dirname[-1], signature_acl, dir_acl)
+					acl = ACL(dirname[-1], dir_acl, signature_acl)
 					de = DirEntry(dirname[-1], username, {}, [])
 					parent.add_dir(dirname[-1], de, acl)
 					mkdirmsg = "Created directory with dirname %s" % str(dirname)
@@ -398,7 +405,7 @@ class EFSServer:
 			parent_name = dirname[-2]
 			parent_acl = grandparent.get_acl()[parent_name]
 			if parent_acl.is_writable(username):
-				acl = ACL(dirname, signature_acl, dir_acl)
+				acl = ACL(dirname, dir_acl, signature_acl)
 				de = DirEntry(dirname, username, {}, [])
 				parent.add_dir(dirname, de, acl)
 				mkdirmsg = "Created directory with dirname %s" % str(dirname)
@@ -436,7 +443,7 @@ class EFSServer:
 			for home_e in self.files:
 				if home_e.name == username:
 					parent = home_e
-					current_entry = parent.get_entry(dirname)
+					current_entry = parent.get_entry(dirname[-1])
 					if current_entry.is_deletable(username):
 						parent.delete_dir(dirname)
 						deletemsg = "Removed directory with dirname %s" % str(dirname)
@@ -454,7 +461,7 @@ class EFSServer:
 			parent_name = dirname[-2]
 			parent_acl = grandparent.get_acl()[parent_name]
 			if parent_acl.is_writable(username):
-				current_entry = parent.get_entry(dirname)
+				current_entry = parent.get_entry(dirname[-1])
 				if current_entry.is_deletable(username):
 					parent.delete_dir(dirname)
 					deletemsg = "Removed directory with dirname %s" % str(dirname)
@@ -483,7 +490,7 @@ class EFSServer:
 		(perm, msg, parent) = self.traverse(username, dirname)
 		data = {}
 		if perm:
-			de = parent.get_entry(dirname)
+			de = parent.get_entry(dirname[-1])
 			if de.is_readable(username):
 				data["contents"] = de.get_names()
 				lsmsg = "Sending list of contents in directory with name %s" % str(dirname)

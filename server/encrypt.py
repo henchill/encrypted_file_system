@@ -15,18 +15,21 @@ def chunk_size(key):
 	times the digest (SHA-1) size, minus 2.
 	"""
 
-	return (key.size() / 8) - (2 * SHA.digest_size) - 2
+	return (key.size() / 8) - (2 * SHA.digest_size) - 2 - 10
 
 def encrypt(key, plaintext, pad=True):
 	"""Encypts filenames (an arbitrary string) of any length."""
 
 	ciphertexts = []
 
+	print "trying to encrypt:", plaintext
+
 	if pad:
 		cipher = PKCS1_OAEP.new(key)
 		for start in xrange(0, len(plaintext), chunk_size(key)):
 			end = start + chunk_size(key)
 			chunk = plaintext[start:end]
+			print "chunk =", chunk.decode("utf-8")
 			ciphertext = cipher.encrypt(chunk)
 			ciphertexts.append(base64.b64encode(ciphertext))
 	else:

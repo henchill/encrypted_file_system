@@ -78,11 +78,15 @@ class DirEntry(Entry):
 		self.acl[dirname] = acl
 
 	def get_entry(self, name):
+		print "name enter: ", name
 		for e in self.contents:
+			print "name: ", e.name
 			if e.name == name:
+				print "nameif: ", e.name
 				return e
 
 	def get_filekey(self, username):
+		print "filekeys", self.filekeys
 		return self.filekeys[username]
 
 	def add_dir(self, subdir_name, subdir_entry, subdir_acl):
@@ -168,7 +172,7 @@ class ACL:
 	ACL_READ = 0
 	ACL_WRITE = 1
 
-	def __init__(self, filename, signature, table):
+	def __init__(self, filename, table, signature):
 		self.filename = filename
 		self.signature = signature
 		self.table = table
@@ -189,7 +193,9 @@ class ACL:
 			return self.table[user][self.PERM][self.ACL_WRITE] == "1"
 
 	def get_filekey(self, user):
+		print "all table: ", self.table
 		if user in self.table:
+			print "table: ", self.table[user]
 			return self.table[user][self.SKEY]
 
 	def get_acl_table(self):
