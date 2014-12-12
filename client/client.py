@@ -309,6 +309,8 @@ def changeDirectory(name):
             'curr_dir': CURRENT_PATH}
 
 def _changeToDir(dr):
+    global CURRENT_DIRECTORY, CURRENT_DIRECTORY_SK
+    global CURRENT_PATH
     if (dr == '..' and len(CURRENT_DIRECTORY) > 0):
         del CURRENT_DIRECTORY[-1]
         del CURRENT_DIRECTORY_SK[-1]
@@ -319,7 +321,7 @@ def _changeToDir(dr):
         CURRENT_PATH = os.path.join(CURRENT_PATH, dr)
         dr = _encryptAES(cipher, dr)
         CURRENT_DIRECTORY.append(dr)
-        CURRENT_DIRECTORY_SK.append(_getSharedKey(dr))
+        CURRENT_DIRECTORY_SK.append(_getSharedKey(CURRENT_DIRECTORY))
         
         
 def readFileContents(name):
