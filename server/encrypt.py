@@ -4,6 +4,7 @@ import base64
 from Crypto.Signature import PKCS1_PSS
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
+from Crypto.Cipher import AES
 from Crypto.Hash import SHA
 from Crypto import Random
 
@@ -109,10 +110,38 @@ def verify_dictionary(key, d):
 	verifier = PKCS1_PSS.new(key)
 	return verifier.verify(h, signature)
 
+def encrypt_aes(key, plaintext):
+	"""Symmetrically encrypts the plaintext with the key.
+
+	Returns a (ciphertext, iv) tuple.
+
+	In addition to the base64-encoded ciphertext, the algorithm returns
+	an initialization vector (IV). This can be public, but should be
+	randomly generated. It is provided for the decryption function.
+	"""
+
+	iv = Random.new().read(AES.block_size)
+	cipher = AES.new(key, AES.MODE_CFB, iv)
+	ciphertext = cipher.encrypt(plaintext)
+
+	b64_iv = base64.b64encode(iv)
+	b64_ciphertext = base64.b64encode(ciphertext)
+
+	return (b64_ciphertext, b64_iv)
+
+def decrypt_aes(key, b64_iv, b64_ciphertext):
+	"""Symmetrically decrypts the plaintext with the key and initialization vector (IV)."""
+
+	iv = base64.b64decode(b64_iv)
+	ciphertext = base64.b64decode(b64_ciphertext)
+	cipher = AES.new(key, AES.MODE_CFB, iv)
+
+	return cipher.decrypt(ciphertext)
+
 def verify_inner_dictionary(key, signature, d):
 	"""Verifies the contents of the dictionary based on its signature."""
 
-	dict_str = json.dumps(d)
+	dict_str = json.dumps(d, sort_keys=True)
 	h = SHA.new()
 	h.update(dict_str)
 
@@ -125,7 +154,7 @@ def sign_inner_dictionary(key, d):
 	"""Signs the contents of the dictionary as encoded in JSON.
 	"""
 
-	dict_str = json.dumps(d)
+	dict_str = json.dumps(d, sort_keys=True)
 	h = SHA.new()
 	h.update(dict_str)
 	signer = PKCS1_PSS.new(key)

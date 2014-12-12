@@ -70,6 +70,7 @@ try:
 	else:
 		print "TEST %d: FAIL" % test
 
+
 	# Test inner signature
 	test = 8
 	signature = sign_inner_dictionary(k, dictionary)
