@@ -118,6 +118,12 @@ class DirEntry(Entry):
 		del self.acl[subdir_name]
 		self.contents.remove(de)
 
+	def is_owner(self, username):
+		if self.owner == username:
+			return True
+		else:
+			return False
+
 class FileEntry(Entry):
 	def __init__(self, name, owner, acl, file_contents):
 		self.name = name
@@ -139,6 +145,12 @@ class FileEntry(Entry):
 
 	def set_contents(self, new_contents):
 		self.contents = new_contents
+
+	def is_owner(self, username):
+		if self.owner == username:
+			return True
+		else:
+			return False
 
 class ACL:
 	filename = None
@@ -173,3 +185,6 @@ class ACL:
 	def get_filekey(self, user):
 		if user in self.table:
 			return self.table[user][self.SKEY]
+
+	def get_acl_table(self):
+		return self.table
