@@ -195,7 +195,7 @@ class EFSServer:
 			return ErrorResponse(errmsg)
 		
 		data = {}
-		if (len(dirname) == 1 or ((dirname[0] == username) and len(dirname) == 2): #case when dirname is just username
+		if (len(dirname) == 1) and (dirname[0]==username)): #case when dirname is just username, old or ((dirname[0] == username) and (len(dirname) == 2)
 			data["filekey"] = self.home_acls[username].get_filekey(username)
 			filkeymsg = "Sending filekey for user %s and dirname %s" % str(username, dirname)
 			print filekeymsg
@@ -216,14 +216,19 @@ class EFSServer:
 				resp = ErrorResponse(msg)
 				return resp.getPayload(data)
 
+	def is_username(self, name):
+		if name in self.users:
+			return True
+		else:
+			return False
+
 	def read_acl(self, username, pathname):
 		if username not in self.users:
 			errmsg =  "User %s not registered" % username
 			return ErrorResponse(errmsg)
 
 		data = {}
-
-		if (len(pathname) == 1 or ((pathname[0] == username) and len(pathname) == 2): #case when pathname is just username
+		if ((len(pathname) == 1) and is_username(pathname[0])): #reading acl for some home, check that username in acl
 			send_acl = self.home_acls[username].get_acl_table()
 			if username in send_acl:
 				data["acl"] = send_acl
@@ -236,12 +241,15 @@ class EFSServer:
 				print readacl_errmsg
 				resp = ErrorResponse(readacl_errmsg)
 				return resp.getPayload(data)
-
 		else:
 			(perm, msg, parent) = self.traverse(username, pathname)
 			if perm: 
 				entry = parent.get_entry(pathname)
-				send_acl = entry.get_acl(username).get_acl_table()
+				if isinstance(pathname[-1], DirEntry):  #check parent for acl
+					send_acl = parent.get_acl()[pathname[-1]].get_acl_table()
+				else: 
+					send_acl = entry.get_acl().get_acl_table()
+
 				if username in send_acl:
 					data["acl"] = send_acl
 					readaclmsg = "Sending acl table for pathname %s" % str(pathname)
@@ -264,40 +272,41 @@ class EFSServer:
 			return ErrorResponse(errmsg)
 
 		data = {}
-
-		if (len(pathname) == 1 or ((pathname[0] == username) and len(pathname) == 2): #case when pathname is just username
-			send_acl = self.home_acls[username].get_acl_table()
-			if username in send_acl:
-				data["acl"] = send_acl
-				writeaclmsg = "Sending acl table for pathname %s" % str(pathname)
+		new_acl = ACL(pathname, signature_acl, acl)
+		if ((len(pathname) == 1) and is_username(pathname[0])): #writing acl for home, check that username is owner
+			if (pathname[0] == username): #only allow accessing own home acl
+				self.home_acls[username] = new_acl
+				writeaclmsg = "Received acl table for pathname %s. Making update to acl" % str(pathname)
 				print writeaclmsg
 				resp = OKResponse(writeaclmsg)
 				return resp.getPayload(data)
-			else: 
-				writeacl_errmsg = "Found acl, but username not in ACL for %s. Permission Denied" % str(pathname)
-				print readacl_errmsg
-				resp = ErrorResponse(readacl_errmsg)
+			else:
+				writeacl_errmsg = "Trying to change another user's home acl. Permission Denied. "
+				print writeacl_errmsg
+				resp = ErrorResponse(writeacl_errmsg)
 				return resp.getPayload(data)
-
 		else:
 			(perm, msg, parent) = self.traverse(username, pathname)
 			if perm: 
 				entry = parent.get_entry(pathname)
-				send_acl = entry.get_acl(username).get_acl_table()
 				if entry.is_owner(username):
-
-					writeaclmsg = "Sending acl table for pathname %s" % str(pathname)
+					if isinstance(pathname[-1], DirEntry):  #check parent for acl
+						parent.set_acl(pathname[-1], new_acl)
+					else: 
+						entry.set_acl(new_acl)
+					writeaclmsg = "Received acl table for pathname %s. Making update to acl" % str(pathname)
 					print writeaclmsg
 					resp = OKResponse(writeaclmsg)
 					return resp.getPayload(data)
 				else:
-				data["acl"] = de.get_acl(username).get_acl_table()
-				
+					writeacl_errmsg = "Only onwer can change acl. Permission Denied. "
+					print writeacl_errmsg
+					resp = ErrorResponse(writeacl_errmsg)
+					return resp.getPayload(data)	
 			else:
 				print msg
 				resp = ErrorResponse(msg)
 				return resp.getPayload(data)
-
 
 	def create(self, username, filename, file_content, file_acl, signature_acl):
 		if username not in self.users:
@@ -482,7 +491,11 @@ class EFSServer:
 
 	def traverse(self, username, filename):
 		fn = filename
-		current_dir = None
+
+		for p in self.files:
+			if p.name == username:
+				current_dir = p #set current_dir to home so that (aakriti, subdir) parses correctly as it goes through loop once
+				break
 
 		# if creating in own dir, add uname
 		if (filename[0] not in self.users):

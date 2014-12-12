@@ -74,6 +74,9 @@ class DirEntry(Entry):
 	def get_acl(self):
 		return self.acl
 
+	def set_acl(self, dirname, acl):
+		self.acl[dirname] = acl
+
 	def get_entry(self, name):
 		for e in self.contents:
 			if e.name == name:
@@ -140,6 +143,9 @@ class FileEntry(Entry):
 	def get_acl(self):
 		return self.acl
 
+	def set_acl(self, acl):
+		self.acl = acl
+
 	def get_contents(self):
 		return self.contents
 
@@ -164,8 +170,8 @@ class ACL:
 
 	def __init__(self, filename, signature, table):
 		self.filename = filename
-		self.table = table
 		self.signature = signature
+		self.table = table
 
 	def is_valid(self, key):
 		if self.signature is None:
