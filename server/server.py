@@ -240,7 +240,7 @@ class EFSServer:
 
 		data = {}
 
-		if ((len(pathname) == 1) and is_username(pathname[0])): #reading acl for some home, check that username in acl
+		if ((len(pathname) == 1) and (pathname[0]==username)) or (len(pathname)==2 and pathname[0]==username): #reading acl for some home, check that username in acl
 			send_acl = self.home_acls[username].get_acl_table()
 			if username in send_acl:
 				data["acl"] = send_acl
@@ -257,6 +257,7 @@ class EFSServer:
 			(perm, msg, parent) = self.traverse(username, pathname)
 			if perm: 
 				entry = parent.get_entry(pathname[-1])
+				print "parent name: ", parent.name
 				if isinstance(pathname[-1], DirEntry):  #check parent for acl
 					send_acl = parent.get_acl()[pathname[-1]].get_acl_table()
 				else: 
@@ -286,7 +287,7 @@ class EFSServer:
 		data = {}
 
 		new_acl = ACL(pathname, acl, signature_acl)
-		if ((len(pathname) == 1) and is_username(pathname[0])): #writing acl for home, check that username is owner
+		if ((len(pathname) == 1) and (pathname[0]==username)) or (len(pathname)==2 and pathname[0]==username): #writing acl for home, check that username is owner
 			if (pathname[0] == username): #only allow updating own home acl
 				self.home_acls[username] = new_acl
 				writeaclmsg = "Received acl table for pathname %s. Making update to acl" % str(pathname)
@@ -533,7 +534,7 @@ class EFSServer:
 				if current_name not in current_acls:
 					errmsg = "Path doesn't exist, %s" % current_name
 					return (False, errmsg, "")
-				current_acl = current_acl[current_name]
+				current_acl = current_acls[current_name]
 				if (current_acl.is_readable(username) == False):
 					errmsg =  "Permission denied %s" % current_name
 					return (False, errmsg, "")

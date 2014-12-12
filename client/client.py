@@ -12,7 +12,7 @@ from client_objects import *
 from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5
 from Crypto.Cipher import AES
-
+from Crypto import Random
 
 HOME_DIRECTORY = os.path.join(os.environ['HOME'], 'efs_local')
 SERVER_PK = None
@@ -428,7 +428,7 @@ def _getSharedKey(dirname):
     resp = json.loads(_transmitToServer(msg))
     # return decrypt(USER_PRK, resp['shared_key'])
     print "get shared key: ", resp['data']['filekey']
-    return resp['data']['filekey'][0]
+    return decrypt(USER_PRK, resp['data']['filekey'])
     
 def _buildDirectoryNames(name):
     print 'begin build'
@@ -506,9 +506,7 @@ def _unPad(s):
 
 def _getAESCipher(key=None):
     if (key == None): 
-        key = base64.b64encode(os.urandom(32))
-    else:
-        key = decrypt(USER_PRK, [key])
+        key = base64.b64encode(Random.new().read(32))
     cipher = AES.new(base64.b64decode(key))
     print "AES cipher key is", key
     return (key, cipher)

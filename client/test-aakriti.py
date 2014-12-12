@@ -7,8 +7,6 @@ from encrypt import *
 
 if __name__ == "__main__":
  	
- 	resp = client.register('aakriti')
- 	
     resp = client.signIn('aakriti')
     print "RESPONSE REGISTER: ", resp
 
