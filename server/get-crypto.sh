@@ -8,3 +8,5 @@ tar -xzvf $PKG.tar.gz
 cd $PKG
 python2.7 setup.py build
 cp -r build/lib*/Crypto ..
+cd ..
+rm -rf $PKG.tar.gz $PKG/
