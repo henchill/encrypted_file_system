@@ -79,8 +79,8 @@ class DirEntry(Entry):
 
 	def get_entry(self, name):
 		print "name enter: ", name
+		print "self.contents: ", [x.name for x in self.contents]
 		for e in self.contents:
-			print "name: ", e.name
 			if e.name == name:
 				print "nameif: ", e.name
 				return e

@@ -10,10 +10,13 @@ if __name__ == "__main__":
     resp = client.signIn('henchill')
     print "RESPONSE REGISTER: ", resp
 
-    resp = client.writeFile("foo/test.txt")
-    print "RESPONSE CREATE_FILE1: ", resp
+    resp = client.writeFile("/aakriti/test3.txt", "foo/test.txt")
+    print "RESPONSE CREATE_FILE3:", resp
+    
+    # resp = client.writeFile("/aakriti/foo/test.txt", "foo/test.txt")
+    # print "RESPONSE CREATE_FILE1: ", resp
 
-    resp = client.readFile("foo/test2.txt")
+    resp = client.readFile("/aakriti/foo/test2.txt")
     print "RESPONSE CREATE_FILE2: ", resp
 
     

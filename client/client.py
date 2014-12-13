@@ -96,7 +96,7 @@ def signIn(username):
     _getUserPrivateKey(username) #USER_PRK
 
     shared_key = _getSharedKey([username])
-    print "shared key signin: ", shared_key
+    # print "shared key signin: ", shared_key
     if (CURRENT_DIRECTORY == None or CURRENT_DIRECTORY_SK == None):
         CURRENT_DIRECTORY = [username]
         CURRENT_DIRECTORY_SK = [shared_key]
@@ -179,14 +179,14 @@ def createDirectory(name):
 def delete(name):
     raise NotImplementedError
 
-def writeFile(name, data=None):
+def writeFile(name, local):
     enc_dirs, key = _getEncryptedFilePath(name)
     key, cipher = _getAESCipher(key)
     
     # acl = {CURRENT_USER: ['1', '1']}
     # signature_acl = sign_inner_dictionary(USER_PRK, acl)
     
-    contents = readFileContents(name)
+    contents = readFileContents(local)
     if (contents == ""): 
         status = {'status': 'error',
                   'message': 'cannot write empty file to server'}
@@ -280,7 +280,8 @@ def listDir(name):
 
 def setPerm(obj, perm, users):
     enc_dirs, key = _getEncryptedFilePath(obj)
-    
+    print "read perm: " , obj
+    print "enc_dirs: ", enc_dirs
     data = {'username': CURRENT_USER,
             'action': 'read_acl',
             'pathname': enc_dirs}
@@ -403,16 +404,20 @@ def _getEncryptedFilePath(name):
         encr_dirs.append(current_enc_dir)
     else:
         current_sk = CURRENT_DIRECTORY_SK[-1]
-        print "current shared key: ", current_sk
+        # print "current shared key: ", current_sk
         dir_list = dir_list[1:]
         encr_dirs = list(CURRENT_DIRECTORY)        
-    
+    print "file path 1: ", encr_dirs
     for dirname in dir_list:
+
         key, cipher = _getAESCipher(current_sk)
         enc_dir = _encryptAES(cipher, dirname)
         encr_dirs.append(enc_dir)
         if (dirname != dir_list[-1]):
             current_sk = _getSharedKey(encr_dirs)
+        print "dirname: ", dirname
+        print "file path 2: ", encr_dirs
+
     return (encr_dirs, current_sk)
 
 def _getSharedKey(dirname):
@@ -427,7 +432,7 @@ def _getSharedKey(dirname):
         'data': data })
     resp = json.loads(_transmitToServer(msg))
     # return decrypt(USER_PRK, resp['shared_key'])
-    print "get shared key: ", resp['data']['filekey']
+    # print "get shared key: ", resp['data']['filekey']
     return decrypt(USER_PRK, resp['data']['filekey'])
     
 def _buildDirectoryNames(name):
@@ -471,11 +476,11 @@ def _initLocalStorage():
     
 def _getServerPublicKey():
     global SERVER_PK
-    print "home: ", HOME_DIRECTORY, " current user: ", CURRENT_USER
+    # print "home: ", HOME_DIRECTORY, " current user: ", CURRENT_USER
     userdir = os.path.join(HOME_DIRECTORY, CURRENT_USER)
-    print "userdir: ", userdir
+    # print "userdir: ", userdir
     server_pub = os.path.join(userdir, 'server_pk.pem')
-    print server_pub
+    # print server_pub
     f = open(server_pub, 'r')
     SERVER_PK = RSA.importKey(f.read())
     f.close()
@@ -508,7 +513,7 @@ def _getAESCipher(key=None):
     if (key == None): 
         key = base64.b64encode(Random.new().read(32))
     cipher = AES.new(base64.b64decode(key))
-    print "AES cipher key is", key
+    # print "AES cipher key is", key
     return (key, cipher)
 
 def _encryptAES(cipher, plaintext):

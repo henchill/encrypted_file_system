@@ -200,8 +200,10 @@ class EFSServer:
 		
 		data = {}
 
-		if ((len(dirname) == 1) and (dirname[0]==username)) or (len(dirname)==2 and dirname[0]==username): #case when dirname is just username, old or ((dirname[0] == username) and (len(dirname) == 2)
-			data["filekey"] = self.home_acls[username].get_filekey(username)
+		print "username = ", username, "dirname =", dirname
+
+		if ((len(dirname) == 1 or len(dirname)==2) and self.is_username(dirname[0])): #case when dirname is just username, old or ((dirname[0] == username) and (len(dirname) == 2)
+			data["filekey"] = self.home_acls[dirname[0]].get_filekey(username)
 			filekeymsg = "Sending filekey for user %s and dirname %s" % (username, str(dirname))
 
 			print filekeymsg
@@ -256,8 +258,8 @@ class EFSServer:
 		else:
 			(perm, msg, parent) = self.traverse(username, pathname)
 			if perm: 
-				entry = parent.get_entry(pathname[-1])
-				print "parent name: ", parent.name
+				entry = parent.get_entry(pathname)
+				
 				if isinstance(pathname[-1], DirEntry):  #check parent for acl
 					send_acl = parent.get_acl()[pathname[-1]].get_acl_table()
 				else: 
@@ -302,7 +304,7 @@ class EFSServer:
 		else:
 			(perm, msg, parent) = self.traverse(username, pathname)
 			if perm: 
-				entry = parent.get_entry(pathname[-1])
+				entry = parent.get_entry(pathname)
 				if entry.is_owner(username):
 					if isinstance(pathname[-1], DirEntry):  #check parent for acl
 						parent.set_acl(pathname[-1], new_acl)
@@ -505,15 +507,22 @@ class EFSServer:
 
 	def traverse(self, username, filename):
 		fn = filename
+		current = None
 
-		for p in self.files:
-			if p.name == username:
-				current_dir = p #set current_dir to home so that (aakriti, subdir) parses correctly as it goes through loop once
-				break
+		if (self.is_username(filename[0])):
+			current_dir = [p for p in self.files if p.name==filename[0]][0]
+			# current_dir = current_dir[0]
+			#current_dir = self.files[filename[0]]
+		else:
+			for p in self.files:
+				if p.name == username:
+					current_dir = p #set current_dir to home so that (aakriti, subdir) parses correctly as it goes through loop once
+					break
 
 		# if creating in own dir, add uname
 		if (filename[0] not in self.users):
 			fn.insert(0,username)
+
 			
 		print "filename:", fn
 
@@ -526,11 +535,12 @@ class EFSServer:
 					return (False, errmsg, "")
 				else:
 					for e in self.files:
-						if e.name == username:
+						if e.name == filename[0]:
 							current_dir = e
 					continue
 			else:
 				current_acls = current_dir.get_acl() #will only reach here after it has traversed the above if once
+				print "dir", current_dir, "acls", current_acls
 				if current_name not in current_acls:
 					errmsg = "Path doesn't exist, %s" % current_name
 					return (False, errmsg, "")
