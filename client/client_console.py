@@ -48,7 +48,6 @@ def dispatch(cmd, args):
         elif (len(args) == 0):
             print "Please specify a username"
         else:
-            
             resp = client.register(args[0])
             if resp['status'] == 'error': 
                 print "Failed to register user. %s" % resp['message']

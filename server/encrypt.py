@@ -4,10 +4,7 @@ import base64
 from Crypto.Signature import PKCS1_PSS
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
-<<<<<<< HEAD
-=======
 from Crypto.Cipher import AES
->>>>>>> testing
 from Crypto.Hash import SHA
 from Crypto import Random
 
