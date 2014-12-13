@@ -15,11 +15,20 @@ port = 1025
 host = "localhost"
 
 def client():
-	# Test making connection, transmitting
-	test = 6
 	with EFSConnection(host, port) as c:
-		c.transmit(k, "hello")
-	print "TEST %d: PASS" % test
+		# Test making connection, transmitting
+		test = 6
+		c.transmit_encrypted(k, "hello")
+		print "TEST %d: PASS" % test
+
+		# Test receiving stuff
+		test = 8
+		data = c.receive(1024)
+
+		if data == "hi again":
+			print "TEST %d: PASS" % test
+		else:
+			print "TEST %d: FAIL" % test
 
 	os._exit(0)
 
@@ -67,6 +76,10 @@ try:
 		print "TEST %d: FAIL" % test
 
 	time.sleep(2)
+	# Test sending response
+	test = 7
+	conn.sendall("hi again")
+	print "TEST %d: PASS" % test
 
 	s.close()
 
