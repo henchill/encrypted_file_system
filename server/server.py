@@ -352,7 +352,7 @@ class EFSServer:
 		data = {}
 		if perm:	
 			#Made it here => can read file in parent
-			fe = parent.get_entry(filename[-1])
+			fe = parent.get_entry(filename)
 			if fe.is_readable(username):
 				data["filename"] = filename
 				data["file"] = fe.get_contents()
@@ -373,7 +373,7 @@ class EFSServer:
 		data = {}
 		if perm:	
 			#Made it here => can write file in parent
-			fe = parent.get_entry(filename[-1])
+			fe = parent.get_entry(filename)
 			if fe.is_writable(username):
 				fe.set_contents(file_contents)
 				writemsg = "Writing to file complete for filename %s" % str(filename)

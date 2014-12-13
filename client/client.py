@@ -230,6 +230,7 @@ def readFile(name):
            'data': data})
     
     response = _transmitToServer(msg)
+    print "respossne: ", response   
     respdata = json.loads(response) #json.loads(decrypt(rsa_key.exportKey('PEM'), response))
     status = {
         'status': respdata['status'],
