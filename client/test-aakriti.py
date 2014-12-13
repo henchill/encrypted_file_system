@@ -6,14 +6,14 @@ from server import *
 from encrypt import *
 
 if __name__ == "__main__":
- 	
+
     resp = client.signIn('aakriti')
     print "RESPONSE REGISTER: ", resp
 
-    resp = client.setPerm('foo', 'rw', ['henchill'])
-
     resp = client.createDirectory("foo")
     print "RESPONSE CREATE_DIR: ", resp
+
+    resp = client.setPerm('foo', 'rw', ['henchill'])
 
     resp = client.createFile("foo/test.txt")
     print "RESPONSE CREATE_FILE1: ", resp

@@ -39,14 +39,45 @@ class EFSServer:
 			username = request["username"]
 			signature = request["signature"]
 
+			# Getting a key has no signature check
+			if action == "key":
+				return self.get_key(data)
+
+			# Registering has its own signature check
 			if action == "register":
 				return self.register(data, signature)
-			elif action == "key":
-				return self.get_key(data)
+
+			# Signatures required for all others
+			if not self.verify_user_request(username, signature, data):
+				if debug:
+					print "[handle_request] Signature verification failed."
+				return ErrorResponse("[handle_request] Signature verification failed.")
+
+			if action == "filekey":
+				print "filekey"
+				return self.get_filekey(username, data)
+			elif action == "read_acl":
+				return self.get_acl(username, data)
+			elif action == "mkdir":
+				return self.mkdir(username, data)
+			elif action == "write_acl":
+				return self.write_acl(username, data)
 
 		except KeyError as ke:
 			print "Couldn't find key:", ke
 			print traceback.format_exc()
+
+	def verify_user_request(self, username, signature, data):
+		# User exists?
+		if not self.is_user(username):
+			return False
+
+		# Get user's key
+		for user in self.users:
+			if user.name == username:
+				user_public_key = user.public_key
+
+		return verify_inner_dictionary(user_public_key, signature, data)
 
 	def register(self, data, signature):
 		public_key_dict = data["public_key"]
@@ -61,7 +92,7 @@ class EFSServer:
 
 		# Check if username exists
 		username = data["username"]
-		if username in [user.name for user in self.users]:
+		if self.is_user(username):
 			return ErrorResponse("[register] User %s already exists." % username)
 
 		user = User(username, user_public_key)
@@ -84,11 +115,14 @@ class EFSServer:
 
 	def get_key(self, data):
 		requested_username = data["username"]
+
 		if requested_username == "" or requested_username == "server":
 			key = self.key
 			msg = "Public key of server is"
-		elif requested_username in [user.name for user in self.users]:
-			key = user.public_key
+		elif self.is_user(requested_username):
+			for user in self.users:
+				if requested_username == user.name:
+					key = user.public_key
 			msg = "Public key of user %s is" % requested_username
 		else:
 			return ErrorResponse("No user named %s" % requested_username)
@@ -97,6 +131,155 @@ class EFSServer:
 
 		return DictResponse(msg, data)
 
+	def get_filekey(self, requester, data):
+		if not self.is_user(requester):
+			return ErrorResponse("User %s is not registered" % requester)
+
+		path = self.resolve_path(requester, data["dirname"])
+
+		node = self.traverse(path)
+		if self.is_homedir(path):
+			filekey = self.homeacls[path[0]].get_filekey(requester)
+		elif isinstance(node, FileEntry) or isinstance(node, DirectoryEntry):
+			parent = self.traverse_to_parent(path)
+			filename = path[-1]
+			parent_acl = parent.acl[filename]
+			filekey = parent_acl.get_filekey(requester)
+
+		print "[filekey] Filekey sent for", [(name[:10] + "...") for name in path]
+
+		return DictResponse("Filekey is", {"filekey": filekey})
+
+	def get_acl(self, requester, data):
+		if not self.is_user(requester):
+			return ErrorResponse("User %s is not registered" % requester)
+
+		path = self.resolve_path(requester, data["pathname"])
+
+		node = self.traverse(path)
+		if self.is_homedir(path):
+			acl = self.homeacls[path[0]]
+		elif isinstance(node, DirectoryEntry):
+			parent = self.traverse_to_parent(path)
+			filename = path[-1]
+			acl = parent.acl[filename]
+		elif isinstance(node, FileEntry):
+			acl = node.acl
+
+		print "[get_acl] ACL sent for", [(name[:10] + "...") for name in path]
+
+		return DictResponse("ACL is", {"acl": acl.table})
+
+	def mkdir(self, username, data):
+		if not self.is_user(username):
+			return ErrorResponse("User %s is not registered" % username)
+
+		full_path = self.resolve_path(username, data["dirname"])
+		print "[mkdir] full_path =", full_path
+		name = full_path[-1]
+
+		# Create ACL
+		acl_table = data["acl"]
+		acl_signature = data["signature_acl"]
+		acl = ACL(username, username, acl_table, acl_signature)
+		print "[mkdir] Created ACL for directory %s..." % name[:10]
+
+		# Traverse and get parent
+		parent = self.traverse_to_parent(full_path)
+		directory = DirectoryEntry(name, username, acl)
+		parent.acl[name] = acl
+		print "[mkdir] Created directory with name %s..." % name[:10]
+
+		parent.contents.append(directory)
+
+		return DictResponse("Created directory", {})
+
+	def write_acl(self, username, data):
+		if not self.is_user(username):
+			return ErrorResponse("User %s is not registered" % username)
+
+		path = self.resolve_path(username, data["pathname"])
+
+		# Create ACL
+		acl_table = data["acl"]
+		acl_signature = data["signature_acl"]
+		acl = ACL(username, username, acl_table, acl_signature)
+
+		# Traverse and write ACL
+		node = self.traverse(path)
+		if self.is_homedir(path):
+			self.homeacls[path[0]] = acl
+		elif isinstance(node, DirectoryEntry):
+			parent = self.traverse_to_parent(path)
+			filename = path[-1]
+			parent.acl[filename] = acl
+		elif isinstance(node, FileEntry):
+			node.acl = acl
+
+		print "[set_acl] ACL set for", [(name[:10] + "...") for name in path]
+
+		return DictResponse("ACL set", {})
+
+	# Helper functions
+	def is_user(self, name):
+		return name in [user.name for user in self.users]
+
+	def is_homedir(self, path):
+		return len(path) == 1 and path[0] in self.homedirs
+
+	# Path name methods
+	def resolve_path(self, username, path):
+		homedir = path[0]
+		if homedir in self.homedirs: # If resolved, do nothing
+			return path
+		elif username not in [user.name for user in self.users]:
+			raise ValueError("username doesn't exist, so can't resolve path")
+		else:
+			return [username] + path
+
+	def traverse_to_parent(self, path):
+		homedir = path[0]
+		if not homedir in self.homedirs:
+			raise ValueError("Path must be fully resolved (user's name is not first)")
+
+		if len(path) == 1:
+			raise ValueError("Cannot obtain parent of a home directory")
+			# return homedir
+
+		return self.traverse(path[:-1])
+
+	def traverse(self, path):
+		"""Returns the FileEntry or DirectoryEntry corresponding to the fully resolved path."""
+		homedir_path = path[0]
+		if not homedir_path in self.homedirs:
+			raise ValueError("Path must be fully resolved (user's name is not first)")
+
+		homedir = self.homedirs[homedir_path]
+
+		# If it's just the homedir, return that
+		if len(path) == 1:
+			return homedir
+
+		# Traverse the structure
+		current_directory = homedir
+		i = 1
+		while i < len(path) - 1:
+			node_name = path[i]
+			for entry in current_directory.contents:
+				if entry.name == node_name:
+					current_directory = entry
+
+			if not isinstance(current_directory, DirectoryEntry):
+				raise ValueError("Intermediate directory isn't actually a directory")
+
+			i += 1
+
+		leaf_name = path[i]
+		for entry in current_directory.contents:
+			if entry.name == leaf_name:
+				return entry
+
+		print "[traverse] Path not found:", [(name[:10] + "...") for name in path]
 
 class Entry:
 	def __init__(self, name, owner, acl):
@@ -107,9 +290,8 @@ class Entry:
 
 class DirectoryEntry(Entry):
 	def __init__(self, name, owner, acl):
-		Entry.__init__(self, name, owner, acl)
-		self.subdirectories = []
-		self.files = []
+		Entry.__init__(self, name, owner, {})
+		self.contents = []
 
 
 class FileEntry(Entry):
@@ -119,12 +301,20 @@ class FileEntry(Entry):
 
 
 class ACL:
+	PERM = 'perm'
+	ACL_READ = 0
+	ACL_WRITE = 1
+
 	def __init__(self, owner, filename, table, signature):
 		self.owner = owner
 		self.filename = filename
 		self.table = table
 		self.signature = signature
-		
+
+	def get_filekey(self, user):
+		if user in self.table:
+			return self.table[user]["shared_key"]
+		return None
 
 class Response:
 	def __init__(self, status, payload):
@@ -239,4 +429,8 @@ if __name__ == "__main__":
 		server.serve_forever()
 	except KeyboardInterrupt as ki:
 		print "Keyboard interrupt"
+		server.shutdown()
+	except Exception as e:
+		print "Exception,", e
+	finally:
 		server.shutdown()
