@@ -62,6 +62,8 @@ class EFSServer:
 				return self.mkdir(username, data)
 			elif action == "write_acl":
 				return self.write_acl(username, data)
+			elif action == "create":
+				return self.create(username, data)
 
 		except KeyError as ke:
 			print "Couldn't find key:", ke
@@ -219,6 +221,28 @@ class EFSServer:
 		print "[set_acl] ACL set for", [(name[:10] + "...") for name in path]
 
 		return DictResponse("ACL set", {})
+
+	def create(self, username, data):
+		if not self.is_user(username):
+			return ErrorResponse("User %s is not registered" % username)
+
+		full_path = self.resolve_path(username, data["filename"])
+		print "[create] full_path =", [(name[:10] + "...") for name in full_path]
+		name = full_path[-1]
+
+		# Create ACL
+		acl_table = data["acl"]
+		acl_signature = data["signature_acl"]
+		acl = ACL(username, username, acl_table, acl_signature)
+
+		# Traverse and write ACL
+		contents = data["file"]
+		parent = self.traverse_to_parent(full_path)
+		new_file = FileEntry(name, username, acl, contents)
+		parent.contents.append(new_file)
+		print "[create] Created file %s..." % name[:10]
+
+		return DictResponse("Created file", {})
 
 	# Helper functions
 	def is_user(self, name):
