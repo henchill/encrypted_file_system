@@ -18,7 +18,7 @@ use_threaded = False
 
 efs_server = None
 
-debug = True
+debug = False
 
 class EFSServer:
 	def __init__(self):
@@ -54,7 +54,6 @@ class EFSServer:
 				return ErrorResponse("[handle_request] Signature verification failed.")
 
 			if action == "filekey":
-				print "filekey"
 				return self.get_filekey(username, data)
 			elif action == "read_acl":
 				return self.get_acl(username, data)
@@ -64,6 +63,14 @@ class EFSServer:
 				return self.write_acl(username, data)
 			elif action == "create":
 				return self.create(username, data)
+			elif action == "read":
+				return self.read(username, data)
+			elif action == "write":
+				return self.write(username, data)
+			elif action == "remove":
+				return self.remove(username, data)
+			elif action == "ls":
+				return self.listing(username, data)
 
 		except KeyError as ke:
 			print "Couldn't find key:", ke
@@ -140,6 +147,9 @@ class EFSServer:
 		path = self.resolve_path(requester, data["dirname"])
 
 		node = self.traverse(path)
+		if not node:
+			return ErrorResponse("File doesn't exist")
+
 		if self.is_homedir(path):
 			filekey = self.homeacls[path[0]].get_filekey(requester)
 		elif isinstance(node, FileEntry) or isinstance(node, DirectoryEntry):
@@ -159,6 +169,9 @@ class EFSServer:
 		path = self.resolve_path(requester, data["pathname"])
 
 		node = self.traverse(path)
+		if not node:
+			return ErrorResponse("File doesn't exist")
+
 		if self.is_homedir(path):
 			acl = self.homeacls[path[0]]
 		elif isinstance(node, DirectoryEntry):
@@ -169,6 +182,8 @@ class EFSServer:
 			acl = node.acl
 
 		print "[get_acl] ACL sent for", [(name[:10] + "...") for name in path]
+
+		data = {"acl": acl.table}
 
 		return DictResponse("ACL is", {"acl": acl.table})
 
@@ -209,6 +224,9 @@ class EFSServer:
 
 		# Traverse and write ACL
 		node = self.traverse(path)
+		if not node:
+			return ErrorResponse("File doesn't exist")
+
 		if self.is_homedir(path):
 			self.homeacls[path[0]] = acl
 		elif isinstance(node, DirectoryEntry):
@@ -243,6 +261,86 @@ class EFSServer:
 		print "[create] Created file %s..." % name[:10]
 
 		return DictResponse("Created file", {})
+
+	def read(self, username, data):
+		if not self.is_user(username):
+			return ErrorResponse("User %s is not registered" % username)
+
+		full_path = self.resolve_path(username, data["filename"])
+		print "[read] full_path =", [(name[:10] + "...") for name in full_path]
+		name = full_path[-1]
+
+		node = self.traverse(full_path)
+		if not node:
+			return ErrorResponse("File doesn't exist")
+		elif not isinstance(node, FileEntry):
+			return ErrorResponse("Path specifies something that's not a file")
+
+		data = {"filename": full_path, "file": node.contents}
+
+		print "[read] Read file %s..." % name[:10]
+
+		return DictResponse("Read file", data)
+
+	def write(self, username, data):
+		if not self.is_user(username):
+			return ErrorResponse("User %s is not registered" % username)
+
+		full_path = self.resolve_path(username, data["filename"])
+		print "[write] full_path =", [(name[:10] + "...") for name in full_path]
+		name = full_path[-1]
+
+		node = self.traverse(full_path)
+		if not node:
+			return ErrorResponse("File doesn't exist")
+		elif not isinstance(node, FileEntry):
+			return ErrorResponse("Path specifies something that's not a file")
+
+		node.contents = data["file"]
+
+		print "[write] Wrote file %s..." % name[:10]
+
+		return DictResponse("Wrote file", {})
+
+	def remove(self, username, data):
+		if not self.is_user(username):
+			return ErrorResponse("User %s is not registered" % username)
+
+		full_path = self.resolve_path(username, data["filename"])
+		print "[remove] full_path =", [(name[:10] + "...") for name in full_path]
+		name = full_path[-1]
+
+		if self.is_homedir(full_path):
+			return ErrorResponse("Can't remove a home directory")
+
+		parent = self.traverse_to_parent(full_path)
+		node = self.traverse(full_path)
+
+		if not node:
+			return ErrorResponse("File doesn't exist")
+		elif isinstance(node, DirectoryEntry) and node.contents:
+			return ErrorResponse("Can't remove non-empty directory")
+
+		parent.contents.remove(node)
+
+		print "[remove] Deleted file %s..." % name[:10]
+
+		return DictResponse("Removed file", {})
+
+	def listing(self, username, data):
+		if not self.is_user(username):
+			return ErrorResponse("User %s is not registered" % username)
+
+		full_path = self.resolve_path(username, data["dirname"])
+		print "[listing] full_path =", [(name[:10] + "...") for name in full_path]
+
+		node = self.traverse(full_path)
+		if not isinstance(node, DirectoryEntry):
+			return ErrorResponse("Can't list a non-directory")
+
+		data = {"contents": [entry.name for entry in node.contents]}
+
+		return DictResponse("Listing is", data)
 
 	# Helper functions
 	def is_user(self, name):
@@ -304,6 +402,10 @@ class EFSServer:
 				return entry
 
 		print "[traverse] Path not found:", [(name[:10] + "...") for name in path]
+
+
+# OBJECT CLASS DEFINITIONS
+
 
 class Entry:
 	def __init__(self, name, owner, acl):
@@ -373,6 +475,8 @@ class User:
 		self.name = name
 		self.public_key = public_key
 
+
+# SERVER
 
 class EFSHandler(SocketServer.BaseRequestHandler):
 	def receive(self):

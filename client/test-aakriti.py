@@ -24,6 +24,21 @@ if __name__ == "__main__":
     resp = client.createFile("test3.txt")
     print "RESPONSE CREATE_FILE3", resp
 
+    resp = client.writeString("test3.txt", "hello goodbye")
+    print "RESPONSE WRITE_STRING", resp
+
+    resp = client.readString("test3.txt")
+    print "RESPONSE READ_STRING", resp
+
+    resp = client.listDir("")
+    print "RESPONSE LIST 1", resp
+
+    resp = client.delete("test3.txt")
+    print "RESPONSE DELETE", resp
+
+    resp = client.listDir("")
+    print "RESPONSE LIST 2", resp
+
     resp = client.setPerm('test3.txt', 'rw', ['henchill'])
     resp = client.setPerm('foo/test.txt', 'rw', ['henchill'])
     print "RESPONSE SETPERM: ", resp
