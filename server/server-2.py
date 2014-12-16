@@ -1,5 +1,6 @@
 #!/usr/bin/env python2.7
 
+import stat
 import time
 import socket
 import threading
@@ -71,6 +72,8 @@ class EFSServer:
 				return self.remove(username, data)
 			elif action == "ls":
 				return self.listing(username, data)
+			elif action == "getattr":
+				return self.getattr(username, data)
 
 		except KeyError as ke:
 			print "Couldn't find key:", ke
@@ -334,6 +337,11 @@ class EFSServer:
 		full_path = self.resolve_path(username, data["dirname"])
 		print "[listing] full_path =", [(name[:10] + "...") for name in full_path]
 
+		# Listing root is listing users
+		if self.is_root(full_path):
+			root_data = {"contents": [user.name for user in self.users]}
+			return DictResponse("Listing is", root_data)
+
 		node = self.traverse(full_path)
 		if not isinstance(node, DirectoryEntry):
 			return ErrorResponse("Can't list a non-directory")
@@ -342,6 +350,38 @@ class EFSServer:
 
 		return DictResponse("Listing is", data)
 
+	def getattr(self, username, data):
+		if not self.is_user(username):
+			return ErrorResponse("User %s is not registered" % username)
+
+		full_path = self.resolve_path(username, data["filename"])
+		print "[getattr] full_path =", [(name[:10] + "...") for name in full_path]
+		name = full_path[-1]
+
+		attr = {"st_atime": 0,
+				"st_ctime": 0,
+				"st_gid":   0,
+				"st_mode":  0,
+				"st_mtime": 0,
+				"st_nlink": 0,
+				"st_size":  0,
+				"st_uid":   0}
+
+		if full_path == ["/"]:
+			attr["st_mode"] = stat.S_IFDIR
+			return DictResponse("Root attributes are:", attr)
+
+		node = self.traverse(full_path)
+		if not node:
+			return ErrorResponse("File doesn't exist")
+
+		if isinstance(node, DirectoryEntry):
+			attr["st_mode"] = stat.S_IFDIR
+		elif isinstance(node, FileEntry):
+			attr["st_mode"] = stat.S_IFREG
+
+		return DictResponse("Attributes are", attr)
+
 	# Helper functions
 	def is_user(self, name):
 		return name in [user.name for user in self.users]
@@ -349,8 +389,14 @@ class EFSServer:
 	def is_homedir(self, path):
 		return len(path) == 1 and path[0] in self.homedirs
 
+	def is_root(self, path):
+		return len(path) == 1 and path[0] == "/"
+
 	# Path name methods
 	def resolve_path(self, username, path):
+		if self.is_root(path): # If root, do nothing
+			return path
+
 		homedir = path[0]
 		if homedir in self.homedirs: # If resolved, do nothing
 			return path
@@ -537,7 +583,8 @@ class EFSHandler(SocketServer.BaseRequestHandler):
 				print "Server response:", response_text
 			self.request.sendall(response_text)
 		else:
-			self.request.sendall(str(response))
+			response_dict = {"status": response.status, "message": response.payload}
+			self.request.sendall(json.dumps(response_dict))
 
 if __name__ == "__main__":
 	efs_server = EFSServer()

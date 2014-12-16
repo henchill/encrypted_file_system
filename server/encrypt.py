@@ -22,14 +22,11 @@ def encrypt(key, plaintext, pad=True):
 
 	ciphertexts = []
 
-	print "trying to encrypt:", plaintext
-
 	if pad:
 		cipher = PKCS1_OAEP.new(key)
 		for start in xrange(0, len(plaintext), chunk_size(key)):
 			end = start + chunk_size(key)
 			chunk = plaintext[start:end]
-			print "chunk =", chunk.decode("utf-8")
 			ciphertext = cipher.encrypt(chunk)
 			ciphertexts.append(base64.b64encode(ciphertext))
 	else:
@@ -113,33 +110,31 @@ def verify_dictionary(key, d):
 	verifier = PKCS1_PSS.new(key)
 	return verifier.verify(h, signature)
 
+block_size = 16
+
+def aes_pad(s):
+    return s + ((block_size - len(s) % block_size) * chr(block_size - len(s) % block_size))
+
+def aes_unpad(s):
+    return s[:-ord(s[len(s)-1:])]
+
 def encrypt_aes(key, plaintext):
-	"""Symmetrically encrypts the plaintext with the key.
+	"""Symmetrically encrypts the plaintext with the key."""
 
-	Returns a (ciphertext, iv) tuple.
+	cipher = AES.new(key)
+	ciphertext = cipher.encrypt(aes_pad(plaintext))
 
-	In addition to the base64-encoded ciphertext, the algorithm returns
-	an initialization vector (IV). This can be public, but should be
-	randomly generated. It is provided for the decryption function.
-	"""
-
-	iv = Random.new().read(AES.block_size)
-	cipher = AES.new(key, AES.MODE_CFB, iv)
-	ciphertext = cipher.encrypt(plaintext)
-
-	b64_iv = base64.b64encode(iv)
 	b64_ciphertext = base64.b64encode(ciphertext)
 
-	return (b64_ciphertext, b64_iv)
+	return b64_ciphertext
 
-def decrypt_aes(key, b64_iv, b64_ciphertext):
+def decrypt_aes(key, b64_ciphertext):
 	"""Symmetrically decrypts the plaintext with the key and initialization vector (IV)."""
 
-	iv = base64.b64decode(b64_iv)
 	ciphertext = base64.b64decode(b64_ciphertext)
-	cipher = AES.new(key, AES.MODE_CFB, iv)
+	cipher = AES.new(key)
 
-	return cipher.decrypt(ciphertext)
+	return aes_unpad(cipher.decrypt(ciphertext))
 
 def verify_inner_dictionary(key, signature, d):
 	"""Verifies the contents of the dictionary based on its signature."""
