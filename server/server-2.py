@@ -74,6 +74,8 @@ class EFSServer:
 				return self.listing(username, data)
 			elif action == "getattr":
 				return self.getattr(username, data)
+			elif action == "exists":
+				return self.exists(username, data)
 
 		except KeyError as ke:
 			print "Couldn't find key:", ke
@@ -153,13 +155,15 @@ class EFSServer:
 		if not node:
 			return ErrorResponse("File doesn't exist")
 
-		if self.is_homedir(path):
+		if self.is_homedir(path):              # home directories have own ACLs
 			filekey = self.homeacls[path[0]].get_filekey(requester)
-		elif isinstance(node, FileEntry) or isinstance(node, DirectoryEntry):
+		elif isinstance(node, DirectoryEntry): # directories stored in parent
 			parent = self.traverse_to_parent(path)
 			filename = path[-1]
 			parent_acl = parent.acl[filename]
 			filekey = parent_acl.get_filekey(requester)
+		elif isinstance(node, FileEntry):      # file ACL stored in file itself
+			filekey = node.acl.get_filekey(requester)
 
 		print "[filekey] Filekey sent for", [(name[:10] + "...") for name in path]
 
@@ -258,8 +262,9 @@ class EFSServer:
 
 		# Traverse and write ACL
 		contents = data["file"]
+		length = data["length"]
 		parent = self.traverse_to_parent(full_path)
-		new_file = FileEntry(name, username, acl, contents)
+		new_file = FileEntry(name, username, acl, contents, length)
 		parent.contents.append(new_file)
 		print "[create] Created file %s..." % name[:10]
 
@@ -300,6 +305,7 @@ class EFSServer:
 			return ErrorResponse("Path specifies something that's not a file")
 
 		node.contents = data["file"]
+		node.length = data["length"]
 
 		print "[write] Wrote file %s..." % name[:10]
 
@@ -367,20 +373,36 @@ class EFSServer:
 				"st_size":  0,
 				"st_uid":   0}
 
+		# Special case root directory
 		if full_path == ["/"]:
-			attr["st_mode"] = stat.S_IFDIR
+			attr["st_mode"] = stat.S_IFDIR | stat.S_IRWXO
 			return DictResponse("Root attributes are:", attr)
 
 		node = self.traverse(full_path)
 		if not node:
 			return ErrorResponse("File doesn't exist")
 
+		file_permissions = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH | stat.S_IWOTH
+
 		if isinstance(node, DirectoryEntry):
-			attr["st_mode"] = stat.S_IFDIR
+			attr["st_mode"] = stat.S_IFDIR | stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO
 		elif isinstance(node, FileEntry):
-			attr["st_mode"] = stat.S_IFREG
+			attr["st_mode"] = stat.S_IFREG | file_permissions
+			attr["st_size"] = node.length
 
 		return DictResponse("Attributes are", attr)
+
+	def exists(self, username, data):
+		if not self.is_user(username):
+			return ErrorResponse("User %s is not registered" % username)
+
+		full_path = self.resolve_path(username, data["filename"])
+
+		node = self.traverse(full_path)
+
+		data = {"exists": (node is not None)}
+
+		return DictResponse("Exists?", data)
 
 	# Helper functions
 	def is_user(self, name):
@@ -449,7 +471,6 @@ class EFSServer:
 
 		print "[traverse] Path not found:", [(name[:10] + "...") for name in path]
 
-
 # OBJECT CLASS DEFINITIONS
 
 
@@ -467,9 +488,10 @@ class DirectoryEntry(Entry):
 
 
 class FileEntry(Entry):
-	def __init__(self, name, owner, acl, contents):
+	def __init__(self, name, owner, acl, contents, length):
 		Entry.__init__(self, name, owner, acl)
 		self.contents = contents
+		self.length = length
 
 
 class ACL:

@@ -28,20 +28,22 @@ class ParanoiaFUSE(Operations):
     def __init__(self, username, keyfile):
         self.username = username
 
-        if not keyfile:
+        try:
+            if not keyfile:
+                keyfile = username + ".pem"
+            with open(keyfile, "r") as key:
+                self.key = RSA.importKey(key.read())
+            print "[key loaded from %s]" % keyfile
+        except IOError as e:
             self.key = RSA.generate(rsa_key_size)
             with open(username + ".pem", "w") as keyfile:
                 keyfile.write(self.key.exportKey("PEM"))
             print "[key generated and saved to %s.pem]" % username
             self._register()
-        else:
-            with open(keyfile, "r") as key:
-                self.key = RSA.importKey(key.read())
-            print "[key loaded from %s]" % keyfile
 
         self._get_server_key()
-        self.fd = 0
-        self.files = []
+        self.fd = 3
+        self.files = [None, None, None]
 
     # Helpers
     # =======
@@ -86,7 +88,7 @@ class ParanoiaFUSE(Operations):
         if response["status"] == "OK":
             print "[registered user %s]" % self.username
         else:
-            print "Error, server says:", response["message"]
+            print "[_register] Error, server says:", response["message"]
 
     def _get_server_key(self):
         rsa_key = self.key
@@ -106,7 +108,7 @@ class ParanoiaFUSE(Operations):
             self.server_key = RSA.construct((N, e))
             print "[got server key]"
         else:
-            print "Error, server says:", response["message"]
+            print "[_get_server_key] Error, server says:", response["message"]
 
     def _encrypt_path(self, path):
         # Create directory array
@@ -158,25 +160,46 @@ class ParanoiaFUSE(Operations):
             response = json.loads(c.receive(8192))
 
         if not response["status"] == "OK":
-            print "Error, server says:", response["message"]
+            print "[_get_file_key] Error, server says:", response["message"]
             return None
 
         return decrypt(self.key, response["data"]["filekey"])
 
+    def _exists(self, path):
+        """Checks the existence of the given (encrypted) path."""
+        exists_data = {"action": "exists",
+                       "filename": path}
+
+        signature_exists_data = sign_inner_dictionary(self.key, exists_data)
+
+        exists = {"username": self.username,
+                  "signature": signature_exists_data,
+                  "data": exists_data}
+
+        with EFSConnection(host, port) as c:
+            c.transmit_plaintext(json.dumps(exists))
+            response = json.loads(c.receive(8192))
+
+        if not response["status"] == "OK":
+            return False
+
+        return response["data"]["exists"]
+
+
     # Filesystem methods
     # ==================
 
-    def access(self, path, mode):
-        # print "access %s" % path
-        pass
+    # def access(self, path, mode):
+    #     print "access %s" % path
+    #     pass
 
-    def chmod(self, path, mode):
-        full_path = path
-        return os.chmod(full_path, mode)
+    # def chmod(self, path, mode):
+    #     full_path = path
+    #     return os.chmod(full_path, mode)
 
-    def chown(self, path, uid, gid):
-        full_path = path
-        return os.chown(full_path, uid, gid)
+    # def chown(self, path, uid, gid):
+    #     full_path = path
+    #     return os.chown(full_path, uid, gid)
 
     def getattr(self, path, fh=None):
         encrypted_path = self._encrypt_path(path)
@@ -191,24 +214,23 @@ class ParanoiaFUSE(Operations):
                    "signature": getattr_signature,
                    "data": getattr_data}
 
+        filekey = self._get_file_key(encrypted_path)
+
         with EFSConnection(host, port) as c:
             c.transmit_plaintext(json.dumps(getattr))
             response = json.loads(c.receive(8192))
 
         if response["status"] == "OK":
-            return response["data"]
+            attr = response["data"]
         else:
-            print "Error, server says:", response["message"]
+            print "[getattr] Error, server says:", response["message"]
             raise FuseOSError(errno.ENOENT)
 
-        attr = {"st_atime": 0,
-                "st_ctime": 0,
-                "st_gid": 0,
-                "st_mode": 0,
-                "st_mtime": 0,
-                "st_nlink": 0,
-                "st_size": 0,
-                "st_uid": 0}
+        # Special cases for file types
+        if stat.S_ISREG(attr["st_mode"]):
+            # Decrypt file length
+            attr["st_size"] = int(decrypt_aes(filekey, attr["st_size"]))
+
         return attr
 
     def readdir(self, path, fh):
@@ -236,7 +258,7 @@ class ParanoiaFUSE(Operations):
             # print "[got response from server]:", response["data"]
             encrypted_dirents = response["data"]["contents"]
         else:
-            print "Error, server says:", response["message"]
+            print "[readdir] Error, server says:", response["message"]
 
         # print "edirents = ", encrypted_dirents
 
@@ -251,20 +273,31 @@ class ParanoiaFUSE(Operations):
         for r in dirents:
             yield r
 
-    def readlink(self, path):
-        pathname = os.readlink(self._full_path(path))
-        if pathname.startswith("/"):
-            # Path name is absolute, sanitize it.
-            return os.path.relpath(pathname, self.root)
-        else:
-            return pathname
+    def _remove(self, path):
+        encrypted_path = self._encrypt_path(path)
 
-    def mknod(self, path, mode, dev):
-        return os.mknod(self._full_path(path), mode, dev)
+        remove_data = {"username": self.username,
+                       "action": "remove",
+                       "filename": encrypted_path}
+
+        remove_signature = sign_inner_dictionary(self.key, remove_data)
+
+        remove = {"username": self.username,
+                  "signature": remove_signature,
+                  "data": remove_data}
+
+        with EFSConnection(host, port) as c:
+            c.transmit_plaintext(json.dumps(remove))
+            response = json.loads(c.receive(8192))
+
+        if response["status"] == "OK":
+            return 0
+        else:
+            print "[_remove] Error, server says:", response["message"]
+            return -1
 
     def rmdir(self, path):
-        full_path = path
-        return os.rmdir(full_path)
+        return self._remove(path)
 
     def mkdir(self, path, mode):
         encrypted_path = self._encrypt_path(path)
@@ -293,64 +326,202 @@ class ParanoiaFUSE(Operations):
         if response["status"] == "OK":
             return 0
         else:
-            print "Error, server says:", response["message"]
+            print "[mkdir] Error, server says:", response["message"]
             return -1
 
-    def statfs(self, path):
-        full_path = path
-        stv = os.statvfs(full_path)
-        return dict((key, getattr(stv, key)) for key in ('f_bavail', 'f_bfree',
-            'f_blocks', 'f_bsize', 'f_favail', 'f_ffree', 'f_files', 'f_flag',
-            'f_frsize', 'f_namemax'))
-
-    def unlink(self, path):
-        return os.unlink(self._full_path(path))
-
-    def symlink(self, target, name):
-        return os.symlink(self._full_path(target), self._full_path(name))
+    # def statfs(self, path):
+    #     full_path = path
+    #     stv = os.statvfs(full_path)
+    #     return dict((key, getattr(stv, key)) for key in ('f_bavail', 'f_bfree',
+    #         'f_blocks', 'f_bsize', 'f_favail', 'f_ffree', 'f_files', 'f_flag',
+    #         'f_frsize', 'f_namemax'))
 
     def rename(self, old, new):
-        return os.rename(self._full_path(old), self._full_path(new))
+        print "renaming %s to %s" % (old, new)
 
-    def link(self, target, name):
-        return os.link(self._full_path(target), self._full_path(name))
 
-    def utimens(self, path, times=None):
-        return os.utime(self._full_path(path), times)
+        attr = self.getattr(old)
+        size = attr["st_size"]
+
+        oldfile = self.open(old, os.O_RDONLY)
+        oldfile_contents = self.read(old, size, 0, oldfile)
+
+        newfile = self.open(new, os.O_CREAT | os.O_WRONLY)
+        self.write(new, oldfile_contents, 0, newfile)
+
+    # def utimens(self, path, times=None):
+    #     print "utimens, path=", path
+    #     pass
 
     # File methods
     # ============
 
+    def _create(self, path):
+        acl = self._plain_acl()
+        signature_acl = sign_inner_dictionary(self.key, acl)
+
+        encrypted_filekey = acl[self.username]["shared_key"]
+        filekey = decrypt(self.key, encrypted_filekey)
+        encrypted_empty_string = encrypt_aes(filekey, "")
+        encrypted_length = encrypt_aes(filekey, "0")
+
+        create_data = {"username": self.username,
+                       "action": "create",
+                       "filename": path,
+                       "file": encrypted_empty_string,
+                       "length": encrypted_length,
+                       "acl": acl,
+                       "signature_acl": signature_acl}
+
+        create_signature = sign_inner_dictionary(self.key, create_data)
+
+        create = {"username": self.username,
+                  "signature": create_signature,
+                  "data": create_data}
+
+        with EFSConnection(host, port) as c:
+            c.transmit_plaintext(json.dumps(create))
+            response = json.loads(c.receive(8192))
+
+        return response["status"] == "OK"
+
     def open(self, path, flags):
-        full_path = path
-        return os.open(full_path, flags)
+        encrypted_path = self._encrypt_path(path)
+
+        exists = self._exists(encrypted_path)
+
+        if not self._exists(encrypted_path):
+            if (flags & os.O_CREAT):
+                self._create(encrypted_path)
+            else:
+                raise FuseOSError(errno.ENOENT)
+
+        this_fd = self.fd
+        self.fd += 1
+
+        this_file = {"encrypted_path": encrypted_path}
+
+        self.files.insert(this_fd, this_file)
+        return this_fd
 
     def create(self, path, mode, fi=None):
-        full_path = path
-        print "[creating full_path=%s]" % full_path
-        return os.open(full_path, os.O_WRONLY | os.O_CREAT, mode)
+        print "create, path=", path
+        create_flags = os.O_CREAT | os.O_WRONLY | os.O_TRUNC
+        return self.open(path, create_flags)
+
+    def _read_into_self(self, path, fh):
+        encrypted_path = self._encrypt_path(path)
+
+        read_data = {"username": self.username,
+                     "action": "read",
+                     "filename": encrypted_path}
+
+        read_signature = sign_inner_dictionary(self.key, read_data)
+
+        read = {"username": self.username,
+                "signature": read_signature,
+                "data": read_data}
+
+        with EFSConnection(host, port) as c:
+            c.transmit_plaintext(json.dumps(read))
+            response = json.loads(c.receive(8192))
+
+        if response["status"] == "OK":
+            encrypted_contents = response["data"]["file"]
+            self.files[fh]["encrypted_contents"] = encrypted_contents
 
     def read(self, path, length, offset, fh):
-        os.lseek(fh, offset, os.SEEK_SET)
-        return os.read(fh, length)
+        print "read, path=", path, "offset=", offset, "length=", length
+        if not "encrypted_contents" in self.files[fh]:
+            self._read_into_self(path, fh)
+
+        encrypted_contents = self.files[fh]["encrypted_contents"]
+        encrypted_path = self._encrypt_path(path)
+        filekey = self._get_file_key(encrypted_path)
+        decrypted_contents = decrypt_aes(filekey, encrypted_contents)
+        print "decrypted contents is:", decrypted_contents[offset:offset+length]
+        return decrypted_contents[offset:offset+length]
 
     def write(self, path, buf, offset, fh):
-        os.lseek(fh, offset, os.SEEK_SET)
-        return os.write(fh, buf)
+        print "write, path=", path
+        encrypted_path = self._encrypt_path(path)
 
-    def truncate(self, path, length, fh=None):
-        full_path = path
-        with open(full_path, 'r+') as f:
-            f.truncate(length)
+        if not "encrypted_contents" in self.files[fh]:
+            self._read_into_self(path, fh)
 
-    def flush(self, path, fh):
-        return os.fsync(fh)
+        encrypted_contents = self.files[fh]["encrypted_contents"]
+        filekey = self._get_file_key(encrypted_path)
+        decrypted_contents = decrypt_aes(filekey, encrypted_contents)
 
-    def release(self, path, fh):
-        return os.close(fh)
+        before = decrypted_contents[:offset]
+        after = decrypted_contents[offset+len(buf):]
+        new_contents = before + buf + after
 
-    def fsync(self, path, fdatasync, fh):
-        return self.flush(path, fh)
+        filekey = self._get_file_key(encrypted_path)
+
+        encrypted_new_contents = encrypt_aes(filekey, new_contents)
+        encrypted_length = encrypt_aes(filekey, str(len(new_contents)))
+
+        write_data = {"username": self.username,
+                      "action": "write",
+                      "filename": encrypted_path,
+                      "file": encrypted_new_contents,
+                      "length": encrypted_length}
+
+        write_signature = sign_inner_dictionary(self.key, write_data)
+
+        write = {"username": self.username,
+                 "signature": write_signature,
+                 "data": write_data}
+
+        with EFSConnection(host, port) as c:
+            c.transmit_plaintext(json.dumps(write))
+            response = json.loads(c.receive(8192))
+
+        if response["status"] == "OK":
+            return len(buf)
+        return 0
+
+    # def truncate(self, path, length, fh=None):
+    #     print "truncate, path=", path
+    #     full_path = path
+    #     with open(full_path, 'r+') as f:
+    #         f.truncate(length)
+
+    # def flush(self, path, fh):
+    #     print "flush, path=", path
+    #     encrypted_path = self._encrypt_path(path)
+    #     encrypted_contents = self.files[fh]["encrypted_contents"]
+
+    #     write_data = {"username": self.username,
+    #                   "action": "write",
+    #                   "filename": encrypted_path,
+    #                   "file": encrypted_contents}
+
+    #     write_signature = sign_inner_dictionary(self.key, write_data)
+
+    #     write = {"username": self.username,
+    #              "signature": write_signature,
+    #              "data": write_data}
+
+    #     with EFSConnection(host, port) as c:
+    #         c.transmit_plaintext(json.dumps(write))
+    #         response = json.loads(c.receive(8192))
+
+    #     if response["status"] == "OK":
+    #         pass
+    #     else:
+    #         print "Error, server says:", response["message"]
+
+    # def release(self, path, fh):
+    #     print "release, path=", path
+
+    # def fsync(self, path, fdatasync, fh):
+    #    print "fsync, path=", path
+
+    def unlink(self, path):
+        print "unlink, path=", path
+        return self._remove(path)
 
 
 def main(username, mountpoint, keyfile):

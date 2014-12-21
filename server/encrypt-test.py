@@ -70,7 +70,7 @@ try:
 	else:
 		print "TEST %d: FAIL" % test
 
-	 Test inner signature
+	 # Test inner signature
 	test = 8
 
 	# Test verify
